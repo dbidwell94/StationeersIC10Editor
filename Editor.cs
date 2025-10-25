@@ -874,15 +874,17 @@ namespace StationeersIC10Editor
             _pcm.Export();
         }
 
-        private Vector2 _textAreaOrigin, _textAreaSize, _scrollY;
+        private Vector2 _textAreaOrigin, _textAreaSize;
 
         private bool MouseIsInsideTextArea()
         {
             Vector2 mousePos = ImGui.GetMousePos();
-            return mousePos.x >= _textAreaOrigin.x
-                && mousePos.x <= _textAreaOrigin.x + _textAreaSize.x
-                && mousePos.y >= _textAreaOrigin.y
-                && mousePos.y <= _textAreaOrigin.y + _textAreaSize.y;
+            float px = _textAreaOrigin.x;
+            float py = _textAreaOrigin.y + ImGui.GetScrollY();
+            return mousePos.x >= px
+                && mousePos.x <= px + _textAreaSize.x
+                && mousePos.y >= py
+                && mousePos.y <= py + _textAreaSize.y;
         }
 
         private Vector2 _caretPixelPos;
@@ -903,7 +905,6 @@ namespace StationeersIC10Editor
             clipper.Begin(Lines.Count);
 
             _textAreaOrigin = ImGui.GetCursorScreenPos();
-            _textAreaOrigin.y += ImGui.GetScrollY();
             Vector2 mousePos = ImGui.GetMousePos();
 
             if (MouseIsInsideTextArea())
