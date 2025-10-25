@@ -19,7 +19,7 @@ namespace StationeersIC10Editor
         public static uint ColorComment = ColorFromHTML("#808080");
         public static uint ColorLineNumber = ColorFromHTML("#808080");
         public static uint ColorDefault = ColorFromHTML("#ffffff");
-        public static uint ColorSelection = ColorFromHTML("#3388ff80");
+        public static uint ColorSelection = ColorFromHTML("#1a44b0ff");
         public static uint ColorNumber = ColorFromHTML("#20b2aa");
 
         public const int LineNumberOffset = 5;
