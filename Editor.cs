@@ -931,11 +931,9 @@ namespace StationeersIC10Editor
                     Selection.Start = clickPos;
                     Selection.End.Reset();
                 }
-            }
+                else if (!_hadDoubleClick && (bool)Selection.Start && (ImGui.IsMouseDown(0) || ImGui.IsMouseReleased(0)))
+                    Selection.End = GetTextPositionFromMouse();
 
-            if (!_hadDoubleClick && (bool)Selection.Start && (ImGui.IsMouseDown(0) || ImGui.IsMouseReleased(0)))
-            {
-                Selection.End = GetTextPositionFromMouse();
             }
 
             if (ScrollToCaret)
