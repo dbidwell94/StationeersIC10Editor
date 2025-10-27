@@ -190,6 +190,15 @@ namespace StationeersIC10Editor
         private HashSet<string> registers = new HashSet<string>();
         private HashSet<string> devices = new HashSet<string>();
 
+        private Dictionary<string, uint> builtins = new Dictionary<string, uint>();
+
+        private void _addBuiltin(string name, uint color, HashSet<string> hashSet = null)
+        {
+            if (hashSet != null)
+                hashSet.Add(name);
+            builtins[name] = color;
+        }
+
         public IC10CodeFormatter()
         {
             L.Info("IC10CodeFormatter - Constructor");
@@ -197,28 +206,28 @@ namespace StationeersIC10Editor
             {
                 string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
                 instructions[cmdName] = cmd;
+                builtins[cmdName] = ColorInstruction;
             }
 
             foreach (LogicType lt in EnumCollections.LogicTypes.Values)
-            {
-                string ltName = Enum.GetName(typeof(LogicType), lt);
-                logicTypes.Add(ltName);
-            }
-            logicTypes.Add("Average");
-            logicTypes.Add("Sum");
-            logicTypes.Add("Min");
-            logicTypes.Add("Max");
+                _addBuiltin(Enum.GetName(typeof(LogicType), lt), ColorLogicType, logicTypes);
+
+            foreach (var batchMode in new string[] { "Average", "Sum", "Min", "Max" })
+                _addBuiltin(batchMode, ColorLogicType, logicTypes);
 
             for (int i = 0; i < 16; i++)
-                registers.Add($"r{i}");
+                _addBuiltin($"r{i}", ColorRegister, registers);
 
-            registers.Add("sp");
-            registers.Add("ra");
+            _addBuiltin($"sp", ColorRegister, registers);
+            _addBuiltin($"ra", ColorRegister, registers);
 
             for (int i = 0; i < 6; i++)
-                devices.Add($"d{i}");
+                _addBuiltin($"d{i}", ColorDevice, devices);
 
-            devices.Add("db");
+            _addBuiltin($"db", ColorDevice, devices);
+
+            foreach (var constant in ProgrammableChip.AllConstants)
+                _addBuiltin(constant.Literal, ColorNumber);
         }
 
         public override void ResetCode(string code)
@@ -325,23 +334,13 @@ namespace StationeersIC10Editor
                 return ColorNumber;
             }
 
+            uint color = 0;
+
             token = TrimToken(token);
             if (errors.Contains(token))
                 return ColorError;
-            else if (defines.ContainsKey(token))
-                return ColorDefine;
-            else if (aliases.ContainsKey(token))
-                return ColorAlias;
-            else if (labels.ContainsKey(token))
-                return ColorLabel;
-            else if (instructions.ContainsKey(token))
-                return ColorInstruction;
-            else if (devices.Contains(token))
-                return ColorDevice;
-            else if (logicTypes.Contains(token))
-                return ColorLogicType;
-            else if (registers.Contains(token))
-                return ColorRegister;
+            else if (builtins.TryGetValue(token, out color))
+                return color;
             else
                 return ColorDefault;
         }
