@@ -453,6 +453,11 @@ namespace StationeersIC10Editor
             if (charBefore == ' ' && tokensBefore.Count > 0)
             {
                 var instruction = tokensBefore[0];
+                while(string.IsNullOrWhiteSpace(instruction) && tokensBefore.Count > 1)
+                {
+                    tokensBefore.RemoveAt(0);
+                    instruction = tokensBefore[0];
+                }
                 if (instructions.ContainsKey(instruction))
                 {
                     pos += new Vector2(30, 40);
