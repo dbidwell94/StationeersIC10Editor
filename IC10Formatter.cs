@@ -22,12 +22,29 @@ namespace StationeersIC10Editor
         public static uint ColorSelection = ColorFromHTML("#1a44b0ff");
         public static uint ColorNumber = ColorFromHTML("#20b2aa");
 
+        public static Dictionary<string, uint> IC10Colors = new Dictionary<string, uint>
+        {
+            { "Color.Blue", ColorFromHTML("blue") },
+            { "Color.Gray", ColorFromHTML("gray") },
+            { "Color.Green", ColorFromHTML("green") },
+            { "Color.Orange", ColorFromHTML("orange") },
+            { "Color.Red", ColorFromHTML("red") },
+            { "Color.Yellow", ColorFromHTML("yellow") },
+            { "Color.White", ColorFromHTML("white") },
+            { "Color.Black", ColorFromHTML("black") },
+            { "Color.Brown", ColorFromHTML("brown") },
+            { "Color.Khaki", ColorFromHTML("khaki") },
+            { "Color.Pink", ColorFromHTML("pink") },
+            { "Color.Purple", ColorFromHTML("purple") },
+        };
+
         public const int LineNumberOffset = 5;
 
         public abstract void ResetCode(string code);
         public abstract void RemoveLine(string line);
         public abstract void AddLine(string line);
         public abstract uint GetColor(string token);
+        public abstract uint GetBackground(string token);
         public abstract void DrawTooltip(string line, TextPosition caret, Vector2 pos);
 
         public static uint ColorFromHTML(string htmlColor)
@@ -42,23 +59,29 @@ namespace StationeersIC10Editor
             if (!htmlColor.StartsWith("#"))
             {
                 if (htmlColor == "blue")
-                    return 0xFF0000FF;
+                    return ColorFromHTML("#0000FF");
                 if (htmlColor == "red")
-                    return 0xFFFF0000;
+                    return ColorFromHTML("#FF0000");
                 if (htmlColor == "green")
-                    return 0xFF00FF00;
+                    return ColorFromHTML("#00FF00");
                 if (htmlColor == "white")
-                    return 0xFFFFFFFF;
+                    return ColorFromHTML("#FFFFFF");
                 if (htmlColor == "black")
-                    return 0xFF000000;
+                    return ColorFromHTML("#000000");
                 if (htmlColor == "yellow")
-                    return 0xFFFFFF00;
+                    return ColorFromHTML("#FFFF00");
                 if (htmlColor == "orange")
-                    return 0xFFFFA500;
+                    return ColorFromHTML("#FF662B");
                 if (htmlColor == "purple")
-                    return 0xFF800080;
+                    return ColorFromHTML("#800080");
                 if (htmlColor == "gray" || htmlColor == "grey")
-                    return 0xFF808080;
+                    return ColorFromHTML("#808080");
+                if (htmlColor == "brown")
+                    return ColorFromHTML("#633C2B");
+                if (htmlColor == "pink")
+                    return ColorFromHTML("#E41C99");
+                if (htmlColor == "khaki")
+                    return ColorFromHTML("#63633F");
 
                 L.Warning($"ColorFromHTML - unknown color: {htmlColor}");
                 return ColorDefault;
@@ -154,7 +177,18 @@ namespace StationeersIC10Editor
             foreach (var token in tokens)
             {
                 if (!string.IsNullOrWhiteSpace(token))
+                {
+                    uint bgColor = GetBackground(token);
+                    if (bgColor != 0)
+                    {
+                        Vector2 bgStart = new Vector2(pos.x, pos.y);
+                        Vector2 bgEnd = new Vector2(
+                            pos.x + (charWidth * token.Length),
+                            pos.y + ImGui.GetTextLineHeightWithSpacing());
+                        ImGui.GetWindowDrawList().AddRectFilled(bgStart, bgEnd, bgColor);
+                    }
                     ImGui.GetWindowDrawList().AddText(pos, GetColor(token), token);
+                }
 
                 pos.x += charWidth * token.Length;
             }
@@ -228,6 +262,14 @@ namespace StationeersIC10Editor
 
             foreach (var constant in ProgrammableChip.AllConstants)
                 _addBuiltin(constant.Literal, ColorNumber);
+
+
+            // make sure the tokens are still readable with the background color
+            var black = ColorFromHTML("black");
+            _addBuiltin("Color.White", black);
+            _addBuiltin("Color.Yellow", black);
+            _addBuiltin("Color.Pink", black);
+            _addBuiltin("Color.Green", black);
         }
 
         public override void ResetCode(string code)
@@ -327,6 +369,13 @@ namespace StationeersIC10Editor
                 RemoveDictEntry(labels, tokens[0].Substring(0, tokens[0].Length - 1));
         }
 
+        public override uint GetBackground(string token)
+        {
+            if (IC10Colors.TryGetValue(token, out uint color))
+                return color;
+            return 0;
+        }
+
         public override uint GetColor(string token)
         {
             if (double.TryParse(token, out double number))
@@ -334,12 +383,10 @@ namespace StationeersIC10Editor
                 return ColorNumber;
             }
 
-            uint color = 0;
-
             token = TrimToken(token);
             if (errors.Contains(token))
                 return ColorError;
-            else if (builtins.TryGetValue(token, out color))
+            else if (builtins.TryGetValue(token, out uint color))
                 return color;
             else
                 return ColorDefault;
