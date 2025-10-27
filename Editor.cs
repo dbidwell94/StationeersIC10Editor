@@ -359,6 +359,12 @@ namespace StationeersIC10Editor
             if (WorldManager.IsGamePaused)
                 InputSourceCode.Instance.PauseGameToggle(false);
             InputSourceCode.Instance.ButtonInputCancel();
+
+            // This fixes following behavior:
+            // 1. Open IC10 editor while alt key is pressed (e.g. laptop)
+            // 2. Close IC10 editor with cancel button
+            // -> Right click action on any tool not working until alt key is pressed again
+            InputMouse.SetMouseControl(false);
         }
 
         public void ShowWindow()
