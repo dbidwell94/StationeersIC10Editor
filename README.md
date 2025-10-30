@@ -12,5 +12,12 @@ A custom IC10 editor for Stationeers with additional features.
 
 ## Installation
 
-This mode requires [BepInEx](https://github.com/BepInEx/BepInEx).
-Download the latest release from the [releases page](https://github.com/aproposmath/StationeersIC10Editor/releases) and put it into your `BepInEx/plugins` folder.
+This mod requires [StationeersLaunchPad](https://github.com/StationeersLaunchPad/StationeersLaunchPad).
+
+To install it, you can either
+
+- subscribe the [Stationeers IC10 Editor](https://steamcommunity.com/sharedfiles/filedetails/?id=3592775931) mod on the Steam Workshop.
+
+**OR**
+
+- [download the latest release](https://github.com/aproposmath/StationeersIC10Editor/releases) and put it into your `BepInEx/plugins` folder.
