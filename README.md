@@ -20,4 +20,4 @@ To install it, you can either
 
 **OR**
 
-- [download the latest release](https://github.com/aproposmath/StationeersIC10Editor/releases) and put it into your `BepInEx/plugins` folder.
+- [download the latest release .dll file](https://github.com/aproposmath/StationeersIC10Editor/releases) and put it into your `BepInEx/plugins` folder.
