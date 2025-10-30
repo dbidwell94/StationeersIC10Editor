@@ -544,8 +544,8 @@ namespace StationeersIC10Editor
             string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
             CurrentLine = beforeCaret + newLines[0];
             newLines.RemoveAt(0);
-            if(newLines.Count == 0)
-              newLines.Add("");
+            if (newLines.Count == 0)
+                newLines.Add("");
             int newCaretCol = newLines[newLines.Count - 1].Length;
             newLines[newLines.Count - 1] += afterCaret;
             Lines.InsertRange(CaretLine + 1, newLines);
