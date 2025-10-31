@@ -195,7 +195,7 @@ namespace StationeersIC10Editor
 
             if (codeComment.Length > 1)
             {
-                string token = "#" + codeComment[1];
+                string token = "#" + string.Join("#", codeComment, 1, codeComment.Length - 1);
                 ImGui.GetWindowDrawList().AddText(pos, ColorComment, token);
             }
         }
