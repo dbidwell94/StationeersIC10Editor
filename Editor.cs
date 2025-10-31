@@ -772,6 +772,39 @@ namespace StationeersIC10Editor
                 CaretPos = newPos;
             }
 
+            if (MouseIsInsideTextArea())
+            {
+                if (ImGui.IsMouseDoubleClicked(0))
+                {
+                    _isSelecting = false;
+                    var clickPos = GetTextPositionFromMouse();
+
+                    bool isWordChar = IsWordChar(this[clickPos]);
+
+                    var startPos = FindWordBeginning(clickPos, !isWordChar);
+                    var endPos = FindWordEnd(clickPos, isWordChar);
+
+                    Selection.Start = startPos;
+                    Selection.End = endPos;
+                    CaretPos = endPos;
+                }
+                else if (ImGui.IsMouseClicked(0)) // Left click
+                {
+                    _isSelecting = true;
+                    var clickPos = GetTextPositionFromMouse();
+                    CaretPos = clickPos;
+                    Selection.Start = clickPos;
+                    Selection.End.Reset();
+                }
+                else if (_isSelecting)
+                    Selection.End = GetTextPositionFromMouse();
+
+                if (ImGui.IsMouseReleased(0))
+                    _isSelecting = false;
+
+            }
+
+
         }
 
         private Vector2 buttonSize = new Vector2(85, 0);
@@ -896,11 +929,11 @@ namespace StationeersIC10Editor
             return mousePos.x >= px
                 && mousePos.x <= px + _textAreaSize.x
                 && mousePos.y >= py
-                && mousePos.y <= py + _textAreaSize.y;
+                && mousePos.y <= py + _textAreaSize.y + ImGui.GetTextLineHeightWithSpacing();
         }
 
         private Vector2 _caretPixelPos;
-        private bool _hadDoubleClick = false;
+        private bool _isSelecting = false;
 
         public unsafe void DrawCodeArea()
         {
@@ -919,36 +952,7 @@ namespace StationeersIC10Editor
             _textAreaOrigin = ImGui.GetCursorScreenPos();
             Vector2 mousePos = ImGui.GetMousePos();
 
-            if (MouseIsInsideTextArea())
-            {
-                if (ImGui.IsMouseDoubleClicked(0))
-                {
-                    _hadDoubleClick = true;
-                    var clickPos = GetTextPositionFromMouse();
-
-                    bool isWordChar = IsWordChar(this[clickPos]);
-
-                    var startPos = FindWordBeginning(clickPos, !isWordChar);
-                    var endPos = FindWordEnd(clickPos, isWordChar);
-
-                    Selection.Start = startPos;
-                    Selection.End = endPos;
-                    CaretPos = endPos;
-                }
-                else if (ImGui.IsMouseClicked(0)) // Left click
-                {
-                    _hadDoubleClick = false;
-                    var clickPos = GetTextPositionFromMouse();
-                    CaretPos = clickPos;
-                    Selection.Start = clickPos;
-                    Selection.End.Reset();
-                }
-                else if (!_hadDoubleClick && (bool)Selection.Start && (ImGui.IsMouseDown(0) || ImGui.IsMouseReleased(0)))
-                    Selection.End = GetTextPositionFromMouse();
-
-            }
-
-            if (ScrollToCaret)
+            if (ScrollToCaret > 0)
             {
                 float lineHeight = ImGui.GetTextLineHeightWithSpacing();
                 float lineSpacing = ImGui.GetStyle().ItemSpacing.y;
@@ -971,7 +975,7 @@ namespace StationeersIC10Editor
                 }
 
                 ImGui.SetScrollY(Math.Min(scrollY, ImGui.GetScrollMaxY()));
-                ScrollToCaret = false;
+                ScrollToCaret -= 1;
             }
 
             var selection = Selection.Sorted();
