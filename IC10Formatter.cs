@@ -294,7 +294,7 @@ namespace StationeersIC10Editor
             if (aliases.ContainsKey(token))
                 count += 1; // multiple aliaes are allowed, thus only count as 1
 
-            if (labels.ContainsKey(token))
+            if (labels.ContainsKey(TrimToken(token)))
                 count += labels[token];
 
             if (instructions.ContainsKey(token))
@@ -346,7 +346,7 @@ namespace StationeersIC10Editor
             }
 
             if (tokens[0].EndsWith(":"))
-                AddDictEntry(labels, tokens[0].Substring(0, tokens[0].Length - 1));
+                AddDictEntry(labels, TrimToken(tokens[0]));
         }
 
         public override void RemoveLine(string line)
@@ -366,7 +366,7 @@ namespace StationeersIC10Editor
             }
 
             if (tokens[0].EndsWith(":"))
-                RemoveDictEntry(labels, tokens[0].Substring(0, tokens[0].Length - 1));
+                RemoveDictEntry(labels, TrimToken(tokens[0]));
         }
 
         public override uint GetBackground(string token)
@@ -386,6 +386,12 @@ namespace StationeersIC10Editor
             token = TrimToken(token);
             if (errors.Contains(token))
                 return ColorError;
+            else if (defines.ContainsKey(token))
+                return ColorDefine;
+            else if (aliases.ContainsKey(token))
+                return ColorAlias;
+            else if (labels.ContainsKey(token))
+                return ColorLabel;
             else if (builtins.TryGetValue(token, out uint color))
                 return color;
             else
