@@ -337,7 +337,8 @@ namespace StationeersIC10Editor
         }
 
         private bool Show = false;
-        private double timeLastAction = 0.0;
+        private double _timeLastAction = 0.0;
+        private double _timeLastEscape = 0.0;
 
         public void SwitchToNativeEditor()
         {
@@ -395,7 +396,7 @@ namespace StationeersIC10Editor
                 if (_caretPos.Col > Lines[_caretPos.Line].Length)
                     _caretPos.Col = Lines[_caretPos.Line].Length;
                 ScrollToCaret += 1;
-                timeLastAction = ImGui.GetTime();
+                _timeLastAction = ImGui.GetTime();
             }
         }
 
@@ -667,7 +668,16 @@ namespace StationeersIC10Editor
             }
             else
             {
-                // if (ImGui.IsKeyPressed(ImGuiKey.Escape)) CurrentLine += "<esc>";
+                if (ImGui.IsKeyReleased(ImGuiKey.Escape))
+                {
+                    // Use IsKeyReleased instead of KeyPressed, otherwise
+                    // Unity would also capture the key press and open the game menu
+                    double timeNow = ImGui.GetTime();
+                    if (timeNow < _timeLastEscape + 1.0)
+                        HideWindow();
+                    _timeLastEscape = timeNow;
+                }
+
                 if (ImGui.IsKeyPressed(ImGuiKey.Backspace))
                 {
                     if (DeleteSelectedCode())
@@ -1002,7 +1012,7 @@ namespace StationeersIC10Editor
 
         public void DrawCaret(Vector2 pos)
         {
-            bool blinkOn = ((int)((ImGui.GetTime() - timeLastAction) * 2) % 2) == 0;
+            bool blinkOn = ((int)((ImGui.GetTime() - _timeLastAction) * 2) % 2) == 0;
 
             if (blinkOn)
             {
@@ -1081,7 +1091,7 @@ namespace StationeersIC10Editor
             ImGui.PopStyleColor();
 
 
-            if (ImGui.GetTime() - timeLastAction > 1.0)
+            if (ImGui.GetTime() - _timeLastAction > 1.0)
             {
                 bool hasTooltipFocus = CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, _caretPixelPos);
                 _hasFocus = _hasFocus || hasTooltipFocus;
