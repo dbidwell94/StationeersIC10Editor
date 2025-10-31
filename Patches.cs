@@ -17,6 +17,14 @@ namespace StationeersIC10Editor
             new ConditionalWeakTable<ProgrammableChipMotherboard, IC10Editor>();
         public static List<IC10Editor> AllEditors = new List<IC10Editor>();
 
+        public static void Cleanup()
+        {
+            foreach (var editor in AllEditors)
+                editor.HideWindow();
+            AllEditors.Clear();
+            EditorData = new ConditionalWeakTable<ProgrammableChipMotherboard, IC10Editor>();
+        }
+
         private static IC10Editor GetEditor(ProgrammableChipMotherboard isc)
         {
             L.Info($"Getting IC10Editor for source code {isc}");

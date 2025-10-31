@@ -38,6 +38,7 @@ namespace StationeersIC10Editor
         public const string PluginGuid = "aproposmath-stationeers-ic10-editor"; // Change this to your own unique Mod ID
         public const string PluginName = "IC10Editor";
         public const string PluginVersion = VersionInfo.Version;
+        private Harmony _harmony;
 
         private void Awake()
         {
@@ -47,13 +48,20 @@ namespace StationeersIC10Editor
                 this.Logger.LogInfo(
                     $"Awake ${PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}");
 
-                var harmony = new Harmony(PluginGuid);
-                harmony.PatchAll();
+                _harmony = new Harmony(PluginGuid);
+                _harmony.PatchAll();
             }
             catch (Exception ex)
             {
                 this.Logger.LogError($"Error during ${PluginName} {VersionInfo.VersionGit} init: {ex}");
             }
+        }
+
+        private void OnDestroy()
+        {
+            L.Info($"OnDestroy ${PluginName} {VersionInfo.VersionGit}");
+            IC10EditorPatches.Cleanup();
+            _harmony.UnpatchSelf();
         }
     }
 }

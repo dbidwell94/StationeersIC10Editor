@@ -353,6 +353,9 @@ namespace StationeersIC10Editor
 
         public void HideWindow()
         {
+            if (Show == false)
+                return;
+
             Show = false;
             KeyManager.RemoveInputState("ic10editorinputstate");
             if (InputWindow.InputState == InputPanelState.Waiting)
