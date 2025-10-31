@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.0.7</Version>
+  <Version>0.0.8</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -13,6 +13,7 @@
         - Multiline selection
         - Syntax highlighting
         - Tooltips for IC10 instructions
+        - Ctrl+click on a name to open Stationpedia
         - Switch to native editor
         - (Currently) no line/size limit (use at your own risk, this might change or break with game updates)
 
@@ -26,23 +27,26 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.0.7:
-        - Fix bug in Insert()
+        0.0.8:
+        - Proper cleanup of mod -> support for hot-reloading during development using BepInEx ScriptEngine plugin
 
-        0.0.6:
-        - Syntax highlighting for constants (rgas etc.)
-        - Syntax highlighting for color names ("Color.Black"), applied to background
+        - Open Stationpedia page of name under cursor on Ctrl+mouseclick
 
-        0.0.5:
-        - Fix right-click not working on any tool after opening IC10 Editor with alt-key (laptop) and then cancelling
+        - Close editor when pressing Escape key twice within a second
 
-        0.0.4:
-        - Fix selection handling when clicking outside of window
-        - Fix selection/click when scrolled down
-        - Fix transparent window background in selected code
+        - Fix scrolling to the very end if a new line is appended there
 
-        0.0.3:
-        - Initial Release on Steam Workshop
+        - Move mouse handling code to HandleInput(), fix selecing last line with mouse
+
+        - Syntax highlighting for labels, aliases and defines (was removed by accident)
+
+        - Handle input only when having focus (Enter/Backspace were triggered when typing in Stationpedia before)
+
+        - Move editor window to the right if another game window opened (to not
+          overlap it completely, such that the user at least recognizes where
+          the game window (e.g. Stationpedia) is
+
+        - Fix extra newlines afer inserting only one line
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
