@@ -45,7 +45,7 @@ namespace StationeersIC10Editor
         public abstract void AddLine(string line);
         public abstract uint GetColor(string token);
         public abstract uint GetBackground(string token);
-        public abstract void DrawTooltip(string line, TextPosition caret, Vector2 pos);
+        public abstract bool DrawTooltip(string line, TextPosition caret, Vector2 pos);
 
         public static uint ColorFromHTML(string htmlColor)
         {
@@ -443,11 +443,12 @@ namespace StationeersIC10Editor
             return result;
         }
 
-        public override void DrawTooltip(string line, TextPosition caret, Vector2 pos)
+        public override bool DrawTooltip(string line, TextPosition caret, Vector2 pos)
         {
+            bool hasFocus = false;
             var col = caret.Col;
             if (col == 0)
-                return;
+                return hasFocus;
             var charBefore = line[col - 1];
             var tokensBefore = ICodeFormatter.Tokenize(line.Substring(0, col), true);
             if (charBefore == ' ' && tokensBefore.Count > 0)
@@ -463,6 +464,8 @@ namespace StationeersIC10Editor
                     pos += new Vector2(30, 40);
 
                     ImGui.SetNextWindowSize(new Vector2(500, 0), ImGuiCond.Once);
+                    var displaySize = ImGui.GetIO().DisplaySize;
+                    pos.x = Math.Min(pos.x, displaySize.x - 510);
                     ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
 
                     if (ImGui.Begin("##IC10EditorTooltip",
@@ -476,6 +479,7 @@ namespace StationeersIC10Editor
                         | ImGuiWindowFlags.NoResize
                         ))
                     {
+                        hasFocus = ImGui.IsWindowFocused();
 
                         ScriptCommand scriptCommand = instructions[instruction];
                         String example = ProgrammableChip.GetCommandExample(scriptCommand);
@@ -491,6 +495,7 @@ namespace StationeersIC10Editor
                     }
                 }
             }
+            return hasFocus;
         }
     }
 }

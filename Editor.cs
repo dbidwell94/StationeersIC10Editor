@@ -1014,6 +1014,23 @@ namespace StationeersIC10Editor
             }
         }
 
+        private bool _hasFocus = false;
+        private int _openGameWindows = 0;
+        private Vector2 _windowPos = new Vector2(100, 100);
+        private bool _didGameWindowOpen = false;
+
+        public void CalcDidGameWindowOpen()
+        {
+            int count = 0;
+            count += Stationpedia.Instance.IsVisible ? 1 : 0;
+
+            foreach (var window in InputSourceCode.Instance.HelpWindows)
+                count += window.IsVisible ? 1 : 0;
+
+            _didGameWindowOpen = count > _openGameWindows;
+            _openGameWindows = count;
+        }
+
         public void Draw()
         {
             if (!Show) return;
@@ -1032,13 +1049,25 @@ namespace StationeersIC10Editor
                 var windowPos = 0.5f * (displaySize - windowSize);
 
                 ImGui.SetNextWindowSize(windowSize);
-                ImGui.SetNextWindowPos(windowPos);
+                ImGui.SetNextWindowPos(_windowPos);
                 IsInitialized = true;
+            }
+
+            CalcDidGameWindowOpen();
+            if (_didGameWindowOpen)
+            {
+                _windowPos.x = Math.Max(0.5f * ImGui.GetIO().DisplaySize.x + 50.0f, _windowPos.x);
+                ImGui.SetNextWindowPos(_windowPos);
             }
 
             ImGui.Begin(Title, ImGuiWindowFlags.NoSavedSettings);
 
-            HandleInput();
+            _windowPos = ImGui.GetWindowPos();
+
+            if (_hasFocus)
+                HandleInput();
+
+            _hasFocus = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
 
             DrawHeader();
             DrawCodeArea();
@@ -1047,8 +1076,12 @@ namespace StationeersIC10Editor
             ImGui.End();
             ImGui.PopStyleColor();
 
+
             if (ImGui.GetTime() - timeLastAction > 1.0)
-                CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, _caretPixelPos);
+            {
+                bool hasTooltipFocus = CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, _caretPixelPos);
+                _hasFocus = _hasFocus || hasTooltipFocus;
+            }
 
             DrawHelpWindow();
         }
