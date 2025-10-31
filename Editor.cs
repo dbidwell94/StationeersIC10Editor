@@ -1145,7 +1145,9 @@ namespace StationeersIC10Editor
                     "- Home/End:     Move caret to start/end of line\n" +
                     "- Page Up/Down: Move caret up/down by 20 lines\n" +
                     "- Shift+Arrow:  Select text while moving caret\n" +
-                    "- Ctrl+Arrow:   Move caret by word\n"
+                    "- Ctrl+Arrow:   Move caret by word\n" +
+                    "- 2 * Escape:   Close editor\n" +
+                    "- Ctrl+Click:   Open Stationpedia page of word at cursor\n"
                     );
 
                 ImGui.End();
