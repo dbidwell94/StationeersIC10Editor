@@ -629,6 +629,16 @@ namespace StationeersIC10Editor
             return false;
         }
 
+        public TextRange GetWordAt(TextPosition pos)
+        {
+            bool isWordChar = IsWordChar(this[pos]);
+
+            var startPos = FindWordBeginning(pos, !isWordChar);
+            var endPos = FindWordEnd(pos, isWordChar);
+
+            return new TextRange(startPos, endPos);
+        }
+
         public void HandleInput()
         {
             var io = ImGui.GetIO();
@@ -784,37 +794,45 @@ namespace StationeersIC10Editor
 
             if (MouseIsInsideTextArea())
             {
-                if (ImGui.IsMouseDoubleClicked(0))
+                if (ctrlDown)
                 {
-                    _isSelecting = false;
-                    var clickPos = GetTextPositionFromMouse();
-
-                    bool isWordChar = IsWordChar(this[clickPos]);
-
-                    var startPos = FindWordBeginning(clickPos, !isWordChar);
-                    var endPos = FindWordEnd(clickPos, isWordChar);
-
-                    Selection.Start = startPos;
-                    Selection.End = endPos;
-                    CaretPos = endPos;
+                    if (ImGui.IsMouseReleased(0))
+                    {
+                        // open stationpedia page for word under mouse
+                        string word = "Thing" + GetCode(GetWordAt(GetTextPositionFromMouse()));
+                        Stationpedia._linkIdLookup.TryGetValue(word, out var page);
+                        if (page != null)
+                            Stationpedia.Instance.OpenPageByKey(page.Key);
+                    }
                 }
-                else if (ImGui.IsMouseClicked(0)) // Left click
+                else
                 {
-                    _isSelecting = true;
-                    var clickPos = GetTextPositionFromMouse();
-                    CaretPos = clickPos;
-                    Selection.Start = clickPos;
-                    Selection.End.Reset();
+                    if (ImGui.IsMouseDoubleClicked(0))
+                    {
+                        _isSelecting = false;
+                        var clickPos = GetTextPositionFromMouse();
+                        var range = GetWordAt(clickPos);
+
+                        Selection.Start = range.Start;
+                        Selection.End = range.End;
+                        CaretPos = range.End;
+                    }
+                    else if (ImGui.IsMouseClicked(0)) // Left click
+                    {
+                        _isSelecting = true;
+                        var clickPos = GetTextPositionFromMouse();
+                        CaretPos = clickPos;
+                        Selection.Start = clickPos;
+                        Selection.End.Reset();
+                    }
+                    else if (_isSelecting)
+                        Selection.End = GetTextPositionFromMouse();
+
+                    if (ImGui.IsMouseReleased(0))
+                        _isSelecting = false;
+
                 }
-                else if (_isSelecting)
-                    Selection.End = GetTextPositionFromMouse();
-
-                if (ImGui.IsMouseReleased(0))
-                    _isSelecting = false;
-
             }
-
-
         }
 
         private Vector2 buttonSize = new Vector2(85, 0);
