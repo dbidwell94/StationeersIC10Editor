@@ -271,7 +271,7 @@ namespace StationeersIC10Editor
 
         public LinkedList<EditorState> UndoList;
         public LinkedList<EditorState> RedoList;
-        public bool ScrollToCaret = false;
+        public int ScrollToCaret = 0;
 
         public void PushUndoState()
         {
@@ -394,7 +394,7 @@ namespace StationeersIC10Editor
                     _caretPos.Col = 0;
                 if (_caretPos.Col > Lines[_caretPos.Line].Length)
                     _caretPos.Col = Lines[_caretPos.Line].Length;
-                ScrollToCaret = true;
+                ScrollToCaret += 1;
                 timeLastAction = ImGui.GetTime();
             }
         }
@@ -449,7 +449,6 @@ namespace StationeersIC10Editor
             bool isRelative = true,
             bool isSelecting = false)
         {
-            ScrollToCaret = true;
             Selection.Reset();
             TextPosition newPos = CaretPos;
             if (isRelative)
@@ -714,7 +713,8 @@ namespace StationeersIC10Editor
                     string newLine = CurrentLine.Substring(CaretCol);
                     CurrentLine = CurrentLine.Substring(0, CaretCol);
                     Lines.Insert(CaretLine + 1, newLine);
-                    MoveCaret(0, CaretLine + 1, false);
+                    CaretPos = new TextPosition(CaretLine + 1, 0);
+                    ScrollToCaret += 1; // we need to scroll to caret in the next two frames, one for updating the scroll area, one to actually scroll there
                 }
 
                 string input = string.Empty;
