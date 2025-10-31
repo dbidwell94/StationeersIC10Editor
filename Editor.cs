@@ -642,12 +642,57 @@ namespace StationeersIC10Editor
             return new TextRange(startPos, endPos);
         }
 
-        public void HandleInput()
+        public void HandleInput(bool hasFocus)
         {
             var io = ImGui.GetIO();
             io.ConfigWindowsMoveFromTitleBarOnly = true;
             bool ctrlDown = io.KeyCtrl || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
             bool shiftDown = io.KeyShift || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
+            if (IsMouseInsideTextArea())
+            {
+                if (ctrlDown)
+                {
+                    if (ImGui.IsMouseReleased(0))
+                    {
+                        // open stationpedia page for word under mouse
+                        string word = "Thing" + GetCode(GetWordAt(GetTextPositionFromMouse()));
+                        Stationpedia._linkIdLookup.TryGetValue(word, out var page);
+                        if (page != null)
+                            Stationpedia.Instance.OpenPageByKey(page.Key);
+                    }
+                }
+                else
+                {
+                    if (ImGui.IsMouseDoubleClicked(0))
+                    {
+                        _isSelecting = false;
+                        var clickPos = GetTextPositionFromMouse();
+                        var range = GetWordAt(clickPos);
+
+                        Selection.Start = range.Start;
+                        Selection.End = range.End;
+                        CaretPos = range.End;
+                    }
+                    else if (ImGui.IsMouseClicked(0)) // Left click
+                    {
+                        _isSelecting = true;
+                        var clickPos = GetTextPositionFromMouse();
+                        CaretPos = clickPos;
+                        Selection.Start = clickPos;
+                        Selection.End.Reset();
+                    }
+                    else if (_isSelecting)
+                        Selection.End = GetTextPositionFromMouse();
+
+                    if (ImGui.IsMouseReleased(0))
+                        _isSelecting = false;
+
+                }
+            }
+
+            if (!hasFocus)
+                return;
 
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             {
@@ -795,47 +840,6 @@ namespace StationeersIC10Editor
                 CaretPos = newPos;
             }
 
-            if (IsMouseInsideTextArea())
-            {
-                if (ctrlDown)
-                {
-                    if (ImGui.IsMouseReleased(0))
-                    {
-                        // open stationpedia page for word under mouse
-                        string word = "Thing" + GetCode(GetWordAt(GetTextPositionFromMouse()));
-                        Stationpedia._linkIdLookup.TryGetValue(word, out var page);
-                        if (page != null)
-                            Stationpedia.Instance.OpenPageByKey(page.Key);
-                    }
-                }
-                else
-                {
-                    if (ImGui.IsMouseDoubleClicked(0))
-                    {
-                        _isSelecting = false;
-                        var clickPos = GetTextPositionFromMouse();
-                        var range = GetWordAt(clickPos);
-
-                        Selection.Start = range.Start;
-                        Selection.End = range.End;
-                        CaretPos = range.End;
-                    }
-                    else if (ImGui.IsMouseClicked(0)) // Left click
-                    {
-                        _isSelecting = true;
-                        var clickPos = GetTextPositionFromMouse();
-                        CaretPos = clickPos;
-                        Selection.Start = clickPos;
-                        Selection.End.Reset();
-                    }
-                    else if (_isSelecting)
-                        Selection.End = GetTextPositionFromMouse();
-
-                    if (ImGui.IsMouseReleased(0))
-                        _isSelecting = false;
-
-                }
-            }
         }
 
         private Vector2 buttonSize = new Vector2(85, 0);
@@ -1100,8 +1104,7 @@ namespace StationeersIC10Editor
 
             _windowPos = ImGui.GetWindowPos();
 
-            if (_hasFocus)
-                HandleInput();
+            HandleInput(_hasFocus);
 
             _hasFocus = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
 
