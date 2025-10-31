@@ -542,10 +542,14 @@ namespace StationeersIC10Editor
             CodeFormatter.RemoveLine(CurrentLine);
             string beforeCaret = CurrentLine.Substring(0, CaretCol);
             string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
+            if (newLines.Count == 1)
+            {
+                CaretCol = CurrentLine.Length + newLines[0].Length;
+                CurrentLine = beforeCaret + newLines[0] + afterCaret;
+                return;
+            }
             CurrentLine = beforeCaret + newLines[0];
             newLines.RemoveAt(0);
-            if (newLines.Count == 0)
-                newLines.Add("");
             int newCaretCol = newLines[newLines.Count - 1].Length;
             newLines[newLines.Count - 1] += afterCaret;
             Lines.InsertRange(CaretLine + 1, newLines);
