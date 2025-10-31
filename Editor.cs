@@ -795,7 +795,7 @@ namespace StationeersIC10Editor
                 CaretPos = newPos;
             }
 
-            if (MouseIsInsideTextArea())
+            if (IsMouseInsideTextArea())
             {
                 if (ctrlDown)
                 {
@@ -951,16 +951,17 @@ namespace StationeersIC10Editor
         }
 
         private Vector2 _textAreaOrigin, _textAreaSize;
+        private float _scrollY = 0.0f;
 
-        private bool MouseIsInsideTextArea()
+        private bool IsMouseInsideTextArea()
         {
             Vector2 mousePos = ImGui.GetMousePos();
             float px = _textAreaOrigin.x;
-            float py = _textAreaOrigin.y + ImGui.GetScrollY();
+            float py = _textAreaOrigin.y + _scrollY - ImGui.GetStyle().FramePadding.y;
             return mousePos.x >= px
                 && mousePos.x <= px + _textAreaSize.x
                 && mousePos.y >= py
-                && mousePos.y <= py + _textAreaSize.y + ImGui.GetTextLineHeightWithSpacing();
+                && mousePos.y <= py + _textAreaSize.y;
         }
 
         private Vector2 _caretPixelPos;
@@ -968,19 +969,17 @@ namespace StationeersIC10Editor
 
         public unsafe void DrawCodeArea()
         {
-            _textAreaSize = ImGui.GetContentRegionAvail();
-            float statusLineHeight = ImGui.GetTextLineHeightWithSpacing() * 2;
-            float scrollHeight =
-                _textAreaSize.y - statusLineHeight - (ImGui.GetStyle().FramePadding.y * 2);
-
+            var padding = ImGui.GetStyle().FramePadding;
+            float scrollHeight = ImGui.GetContentRegionAvail().y - 2 * ImGui.GetTextLineHeightWithSpacing() - 2 * padding.y;
             ImGui.BeginChild("ScrollRegion", new Vector2(0, scrollHeight), true);
+            _textAreaOrigin = ImGui.GetCursorScreenPos();
+            _textAreaSize = ImGui.GetContentRegionAvail() + 2 * padding;
 
             ImGuiListClipperPtr clipper = new ImGuiListClipperPtr(
                 ImGuiNative.ImGuiListClipper_ImGuiListClipper());
 
             clipper.Begin(Lines.Count);
 
-            _textAreaOrigin = ImGui.GetCursorScreenPos();
             Vector2 mousePos = ImGui.GetMousePos();
 
             if (ScrollToCaret > 0)
@@ -990,8 +989,8 @@ namespace StationeersIC10Editor
 
                 float pageHeight = (Lines.Count * lineHeight) - ImGui.GetScrollMaxY();
                 float scrollY = ImGui.GetScrollY();
-                float viewTop = scrollY;
-                float viewBottom = scrollY + pageHeight;
+                float viewTop = _scrollY;
+                float viewBottom = _scrollY + pageHeight;
 
                 float caretTop = CaretLine * lineHeight;
                 float caretBottom = caretTop + lineHeight;
@@ -1008,6 +1007,8 @@ namespace StationeersIC10Editor
                 ImGui.SetScrollY(Math.Min(scrollY, ImGui.GetScrollMaxY()));
                 ScrollToCaret -= 1;
             }
+
+            _scrollY = ImGui.GetScrollY();
 
             var selection = Selection.Sorted();
             while (clipper.Step())
