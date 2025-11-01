@@ -516,7 +516,7 @@ namespace StationeersIC10Editor
         {
             if (!DeleteSelectedCode())
                 PushUndoState();
-            Insert(GameManager.Clipboard.Replace("\r", string.Empty));
+            Insert(GameManager.Clipboard);
         }
 
         public void SetTitle(string title)
@@ -538,6 +538,7 @@ namespace StationeersIC10Editor
 
         public void Insert(string code)
         {
+            code = code.Replace("\r", string.Empty);
             var newLines = new List<string>(code.Split('\n'));
             if (newLines.Count == 0)
                 return;
