@@ -44,6 +44,8 @@ namespace StationeersIC10Editor
 
     public class IC10Editor
     {
+        public KeyHandler KeyHandler;
+
         public static bool IsWordChar(char c)
         {
             return char.IsLetterOrDigit(c) || c == '_';
@@ -247,6 +249,7 @@ namespace StationeersIC10Editor
             Lines.Add("");
             CaretPos = new TextPosition(0, 0);
             _pcm = pcm;
+            KeyHandler = new KeyHandler(this);
         }
 
         public ICodeFormatter CodeFormatter;
@@ -311,6 +314,15 @@ namespace StationeersIC10Editor
             }
         }
 
+        public void RemoveLine(int lineIndex)
+        {
+            if (lineIndex < 0 || lineIndex >= Lines.Count)
+                return;
+
+            CodeFormatter.RemoveLine(Lines[lineIndex]);
+            Lines.RemoveAt(lineIndex);
+        }
+
         public void ReplaceLine(int lineIndex, string newLine)
         {
             if (lineIndex < 0 || lineIndex >= Lines.Count)
@@ -338,7 +350,6 @@ namespace StationeersIC10Editor
 
         private bool Show = false;
         private double _timeLastAction = 0.0;
-        private double _timeLastEscape = 0.0;
 
         public void SwitchToNativeEditor()
         {
@@ -645,202 +656,7 @@ namespace StationeersIC10Editor
 
         public void HandleInput(bool hasFocus)
         {
-            var io = ImGui.GetIO();
-            io.ConfigWindowsMoveFromTitleBarOnly = true;
-            bool ctrlDown = io.KeyCtrl || Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-            bool shiftDown = io.KeyShift || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-
-            if (IsMouseInsideTextArea())
-            {
-                if (ctrlDown)
-                {
-                    if (ImGui.IsMouseReleased(0))
-                    {
-                        // open stationpedia page for word under mouse
-                        string word = "Thing" + GetCode(GetWordAt(GetTextPositionFromMouse()));
-                        Stationpedia._linkIdLookup.TryGetValue(word, out var page);
-                        if (page != null)
-                            Stationpedia.Instance.OpenPageByKey(page.Key);
-                    }
-                }
-                else
-                {
-                    if (ImGui.IsMouseDoubleClicked(0))
-                    {
-                        _isSelecting = false;
-                        var clickPos = GetTextPositionFromMouse();
-                        var range = GetWordAt(clickPos);
-
-                        Selection.Start = range.Start;
-                        Selection.End = range.End;
-                        CaretPos = range.End;
-                    }
-                    else if (ImGui.IsMouseClicked(0)) // Left click
-                    {
-                        _isSelecting = true;
-                        var clickPos = GetTextPositionFromMouse();
-                        CaretPos = clickPos;
-                        Selection.Start = clickPos;
-                        Selection.End.Reset();
-                    }
-                    else if (_isSelecting)
-                        Selection.End = GetTextPositionFromMouse();
-
-                    if (ImGui.IsMouseReleased(0))
-                        _isSelecting = false;
-
-                }
-            }
-
-            if (!hasFocus)
-                return;
-
-            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
-            {
-                // these combos are not captured by ImGui for some reason, so handle them via Unity Input
-                if (Input.GetKeyDown(KeyCode.S))
-                    Confirm();
-                if (Input.GetKeyDown(KeyCode.E))
-                    Export();
-            }
-
-            if (ctrlDown)
-            {
-                if (ImGui.IsKeyPressed(ImGuiKey.V))
-                    Paste();
-                if (ImGui.IsKeyPressed(ImGuiKey.A))
-                    SelectAll();
-                if (ImGui.IsKeyPressed(ImGuiKey.C))
-                    Copy();
-                if (ImGui.IsKeyPressed(ImGuiKey.X))
-                    Cut();
-                if (ImGui.IsKeyPressed(ImGuiKey.Z))
-                    Undo();
-                if (ImGui.IsKeyPressed(ImGuiKey.Y))
-                    Redo();
-
-                for (int i = 0; i < io.InputQueueCharacters.Size; i++)
-                {
-                    var ic = io.InputQueueCharacters[i];
-                    char c = (char)ic;
-                }
-            }
-            else
-            {
-                if (ImGui.IsKeyReleased(ImGuiKey.Escape))
-                {
-                    // Use IsKeyReleased instead of KeyPressed, otherwise
-                    // Unity would also capture the key press and open the game menu
-                    double timeNow = ImGui.GetTime();
-                    if (timeNow < _timeLastEscape + 1.0)
-                        HideWindow();
-                    _timeLastEscape = timeNow;
-                }
-
-                if (ImGui.IsKeyPressed(ImGuiKey.Backspace))
-                {
-                    if (DeleteSelectedCode())
-                        return;
-
-                    PushUndoState();
-                    if (CurrentLine.Length > 0 && CaretCol > 0)
-                    {
-                        CurrentLine = CurrentLine.Remove(CaretCol - 1, 1);
-                        CaretCol--;
-                    }
-                    else if (CaretCol == 0 && CaretLine > 0)
-                    {
-                        // Merge with previous line
-                        int prevLineLength = Lines[CaretLine - 1].Length;
-                        CurrentLine = Lines[CaretLine - 1] + CurrentLine;
-                        Lines.RemoveAt(CaretLine - 1);
-                        CodeFormatter.RemoveLine(Lines[CaretLine - 1]);
-                        CaretLine--;
-                        CaretCol = prevLineLength;
-                    }
-                }
-                if (ImGui.IsKeyPressed(ImGuiKey.Delete))
-                {
-                    if (DeleteSelectedCode())
-                        return;
-
-                    PushUndoState();
-                    if (CaretCol < CurrentLine.Length)
-                        CurrentLine = CurrentLine.Remove(CaretCol, 1);
-                    else if (CaretCol == CurrentLine.Length && CaretLine < Lines.Count - 1)
-                    {
-                        // Merge with next line
-                        CurrentLine = CurrentLine + Lines[CaretLine + 1];
-                        Lines.RemoveAt(CaretLine + 1);
-                        CodeFormatter.RemoveLine(Lines[CaretLine]);
-                    }
-                }
-
-                if (ImGui.IsKeyPressed(ImGuiKey.Enter))
-                {
-                    PushUndoState();
-                    string newLine = CurrentLine.Substring(CaretCol);
-                    CurrentLine = CurrentLine.Substring(0, CaretCol);
-                    Lines.Insert(CaretLine + 1, newLine);
-                    CaretPos = new TextPosition(CaretLine + 1, 0);
-                    ScrollToCaret += 1; // we need to scroll to caret in the next two frames, one for updating the scroll area, one to actually scroll there
-                }
-
-                string input = string.Empty;
-                for (int i = 0; i < io.InputQueueCharacters.Size; i++)
-                {
-                    char c = (char)io.InputQueueCharacters[i];
-                    input += c;
-                }
-
-                if (input.Length > 0)
-                {
-                    if (!DeleteSelectedCode())
-                    {
-                        PushUndoState();
-                    }
-
-                    CurrentLine = CurrentLine.Insert(CaretCol, input);
-                    CaretCol += input.Length;
-                }
-            }
-
-            // check for move actions
-            TextPosition newPos = new TextPosition(-1, -1);
-
-            var arrowMoveToken = ctrlDown ? MoveToken.WordBeginning : MoveToken.Char;
-
-            if (ImGui.IsKeyPressed(ImGuiKey.LeftArrow))
-                newPos = Move(CaretPos, new MoveAction(arrowMoveToken, false, 1));
-            if (ImGui.IsKeyPressed(ImGuiKey.RightArrow))
-                newPos = Move(CaretPos, new MoveAction(arrowMoveToken, true, 1));
-            if (ImGui.IsKeyPressed(ImGuiKey.UpArrow))
-                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 1));
-            if (ImGui.IsKeyPressed(ImGuiKey.DownArrow))
-                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 1));
-            if (ImGui.IsKeyPressed(ImGuiKey.Home))
-                newPos = new TextPosition(CaretPos.Line, 0);
-            if (ImGui.IsKeyPressed(ImGuiKey.End))
-                newPos = new TextPosition(CaretPos.Line, Lines[CaretPos.Line].Length);
-            if (ImGui.IsKeyPressed(ImGuiKey.PageUp))
-                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 20));
-            if (ImGui.IsKeyPressed(ImGuiKey.PageDown))
-                newPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 20));
-
-            if ((bool)newPos)
-            {
-                if (shiftDown)
-                {
-                    if (!(bool)Selection.Start)
-                        Selection.Start = CaretPos;
-                    Selection.End = newPos;
-                }
-                else
-                    Selection.Reset();
-
-                CaretPos = newPos;
-            }
-
+            KeyHandler.HandleInput(hasFocus);
         }
 
         private Vector2 buttonSize = new Vector2(85, 0);
@@ -940,6 +756,9 @@ namespace StationeersIC10Editor
             if (ImGui.Button("Confirm", buttonSize))
                 Confirm();
 
+            String status = $"Mode: {KeyHandler.Mode}";
+            ImGui.Text(status);
+
             ImGui.PopStyleVar();
         }
 
@@ -958,7 +777,7 @@ namespace StationeersIC10Editor
         private Vector2 _textAreaOrigin, _textAreaSize;
         private float _scrollY = 0.0f;
 
-        private bool IsMouseInsideTextArea()
+        public bool IsMouseInsideTextArea()
         {
             Vector2 mousePos = ImGui.GetMousePos();
             float px = _textAreaOrigin.x;
@@ -970,7 +789,6 @@ namespace StationeersIC10Editor
         }
 
         private Vector2 _caretPixelPos;
-        private bool _isSelecting = false;
 
         public unsafe void DrawCodeArea()
         {
@@ -1022,9 +840,9 @@ namespace StationeersIC10Editor
                 {
                     if (i == CaretLine)
                     {
+                        DrawCaret(_caretPixelPos);
                         _caretPixelPos = ImGui.GetCursorScreenPos();
                         _caretPixelPos.x += ImGui.CalcTextSize("M").x * (CaretCol + ICodeFormatter.LineNumberOffset);
-                        DrawCaret(_caretPixelPos);
                     }
 
                     CodeFormatter.DrawLine(i, Lines[i], selection);
@@ -1039,19 +857,30 @@ namespace StationeersIC10Editor
 
         public void DrawCaret(Vector2 pos)
         {
-            bool blinkOn = ((int)((ImGui.GetTime() - _timeLastAction) * 2) % 2) == 0;
+            var drawList = ImGui.GetWindowDrawList();
+            var lineHeight = ImGui.GetTextLineHeight();
 
-            if (blinkOn)
+
+            if (KeyHandler.Mode == KeyMode.Insert)
             {
-                var drawList = ImGui.GetWindowDrawList();
-                var lineHeight = ImGui.GetTextLineHeight();
-
-                // Draw a vertical line as the cursor
-                drawList.AddLine(
-                    pos,
-                    new Vector2(pos.x, pos.y + lineHeight),
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, 1)),
-                    1.5f);
+                bool blinkOn = ((int)((ImGui.GetTime() - _timeLastAction) * 2) % 2) == 0;
+                if (blinkOn)
+                {
+                    // Draw a vertical line as the cursor
+                    drawList.AddLine(
+                        pos,
+                        new Vector2(pos.x, pos.y + lineHeight),
+                        ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, 1)),
+                        1.5f);
+                }
+            }
+            else
+            {
+                // Draw a block cursor
+                drawList.AddRectFilled(
+                    new Vector2(pos.x, pos.y),
+                    new Vector2(pos.x + ImGui.CalcTextSize("M").x, pos.y + lineHeight),
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f)));
             }
         }
 
@@ -1176,7 +1005,7 @@ namespace StationeersIC10Editor
         }
 
 
-        private TextPosition GetTextPositionFromMouse()
+        public TextPosition GetTextPositionFromMouse()
         {
             Vector2 mousePos = ImGui.GetMousePos();
             float charWidth = ImGui.CalcTextSize("M").x;
