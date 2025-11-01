@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.0.8</Version>
+  <Version>0.0.9</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -27,26 +27,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.0.8:
-        - Proper cleanup of mod -> support for hot-reloading during development using BepInEx ScriptEngine plugin
-
-        - Open Stationpedia page of name under cursor on Ctrl+mouseclick
-
-        - Close editor when pressing Escape key twice within a second
-
-        - Fix scrolling to the very end if a new line is appended there
-
-        - Move mouse handling code to HandleInput(), fix selecing last line with mouse
-
-        - Syntax highlighting for labels, aliases and defines (was removed by accident)
-
-        - Handle input only when having focus (Enter/Backspace were triggered when typing in Stationpedia before)
-
-        - Move editor window to the right if another game window opened (to not
-          overlap it completely, such that the user at least recognizes where
-          the game window (e.g. Stationpedia) is
-
-        - Fix extra newlines afer inserting only one line
+        0.0.9:
+        - Fix caret position when inserting only one line
+        - Remove carriage return in all code paths when inserting code (fixes extra space at end of lines when pasting on windows)
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
