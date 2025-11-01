@@ -548,8 +548,8 @@ namespace StationeersIC10Editor
             string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
             if (newLines.Count == 1)
             {
-                CaretCol = CurrentLine.Length + newLines[0].Length;
                 CurrentLine = beforeCaret + newLines[0] + afterCaret;
+                CaretCol = beforeCaret.Length + newLines[0].Length;
                 return;
             }
             CurrentLine = beforeCaret + newLines[0];
