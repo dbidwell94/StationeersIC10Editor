@@ -13,6 +13,35 @@ namespace StationeersIC10Editor
     using ImGuiNET;
     using UnityEngine;
 
+    public struct IC10Token
+    {
+        public string Text;
+        public uint Column;
+        public uint Color;
+        public uint Background;
+
+        public IC10Token(string text, uint column, uint color, uint background = 0)
+        {
+            Column = column;
+            Text = text;
+            Color = color;
+            Background = background;
+        }
+    }
+
+
+    public class IC10Line
+    {
+        public List<IC10Token> Tokens;
+
+        public IC10Line(List<IC10Token> tokens)
+        {
+            Tokens = tokens;
+        }
+        
+        public int Length => Tokens.Count == 0 ? 0 : (int)(Tokens[Tokens.Count - 1].Column + Tokens[Tokens.Count - 1].Text.Length);
+    }
+
     public abstract class ICodeFormatter
     {
         public static uint ColorError = ColorFromHTML("#ff0000");
