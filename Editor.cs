@@ -248,6 +248,7 @@ namespace StationeersIC10Editor
             Lines = new List<string>();
             Lines.Add("");
             CaretPos = new TextPosition(0, 0);
+            CodeFormatter.AppendLine("");
             _pcm = pcm;
             KeyHandler = new KeyHandler(this);
         }
@@ -319,7 +320,7 @@ namespace StationeersIC10Editor
             if (lineIndex < 0 || lineIndex >= Lines.Count)
                 return;
 
-            CodeFormatter.RemoveLine(Lines[lineIndex]);
+            CodeFormatter.RemoveLine(lineIndex);
             Lines.RemoveAt(lineIndex);
         }
 
@@ -328,7 +329,7 @@ namespace StationeersIC10Editor
             if (lineIndex < 0 || lineIndex >= Lines.Count)
                 return;
 
-            CodeFormatter.ReplaceLine(Lines[lineIndex], newLine);
+            CodeFormatter.ReplaceLine(lineIndex, newLine);
             Lines[lineIndex] = newLine;
         }
 
@@ -350,6 +351,7 @@ namespace StationeersIC10Editor
 
         private bool Show = false;
         private double _timeLastAction = 0.0;
+        private double _timeLastMouseMove = 0.0;
 
         public void SwitchToNativeEditor()
         {
@@ -550,11 +552,13 @@ namespace StationeersIC10Editor
         public void Insert(string code)
         {
             code = code.Replace("\r", string.Empty);
+            if (string.IsNullOrEmpty(code))
+                return;
             var newLines = new List<string>(code.Split('\n'));
             if (newLines.Count == 0)
                 return;
 
-            CodeFormatter.RemoveLine(CurrentLine);
+            // CodeFormatter.RemoveLine(CaretLine);
             string beforeCaret = CurrentLine.Substring(0, CaretCol);
             string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
             if (newLines.Count == 1)
@@ -568,8 +572,9 @@ namespace StationeersIC10Editor
             int newCaretCol = newLines[newLines.Count - 1].Length;
             newLines[newLines.Count - 1] += afterCaret;
             Lines.InsertRange(CaretLine + 1, newLines);
-            foreach (var line in newLines)
-                CodeFormatter.AddLine(line);
+            for (var j = 0; j < newLines.Count; j++)
+                CodeFormatter.InsertLine(CaretLine + 1 + j, newLines[j]);
+
 
             CaretPos = new TextPosition(
                 CaretLine + newLines.Count,
@@ -624,7 +629,7 @@ namespace StationeersIC10Editor
 
                 for (int i = end.Line; i > start.Line; i--)
                 {
-                    CodeFormatter.RemoveLine(Lines[i]);
+                    CodeFormatter.RemoveLine(i);
                     Lines.RemoveAt(i);
                 }
             }
@@ -739,8 +744,9 @@ namespace StationeersIC10Editor
         public void DrawFooter()
         {
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
-            ImGui.Text(
-                $"Lines: {Lines.Count}  Caret: ({CaretLine},{CaretCol})  Undo: {UndoList.Count}");
+            ImGui.Text($"Lines: {Lines.Count}/128, Size: {Code.Length}/4096 bytes");
+
+            // ImGui.Text( $"Lines: {Lines.Count}  Caret: ({CaretLine},{CaretCol})  Undo: {UndoList.Count}");
 
             ImGui.SameLine();
 
@@ -756,11 +762,18 @@ namespace StationeersIC10Editor
             if (ImGui.Button("Confirm", buttonSize))
                 Confirm();
 
-            String status = $"Mode: {KeyHandler.Mode}";
-            ImGui.Text(status);
+            ImGui.NewLine();
+            if (VimEnabled)
+            {
+                String status = $"Mode: {KeyHandler.Mode}";
+                ImGui.Text(status);
+                ImGui.SameLine();
+            }
 
             ImGui.PopStyleVar();
         }
+
+        public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
 
         public void Confirm()
         {
@@ -901,9 +914,13 @@ namespace StationeersIC10Editor
             _openGameWindows = count;
         }
 
+        private Queue<double> _renderTimes = new();
+
         public void Draw()
         {
             if (!Show) return;
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
             // make sure the native editor is hidden
             InputSourceCode.Instance.Window.localPosition = new Vector3(-10000, -10000, 0);
@@ -942,17 +959,49 @@ namespace StationeersIC10Editor
             DrawCodeArea();
             DrawFooter();
 
+
+            double avgRenderTime = 0.0;
+            double maxRenderTime = 0.0;
+
+            foreach (var time in _renderTimes)
+            {
+                avgRenderTime += time;
+                if (time > maxRenderTime)
+                    maxRenderTime = time;
+            }
+            if (_renderTimes.Count > 0)
+                avgRenderTime /= _renderTimes.Count;
+
+            avgRenderTime = (avgRenderTime * 1000000.0);
+            maxRenderTime = (maxRenderTime * 1000000.0);
+
+            // ImGui.Text( $"Avg: {avgRenderTime:F0} us, Max: {maxRenderTime:F0} us");
+
+            ImGui.SameLine();
+            CodeFormatter.DrawStatus();
+
             ImGui.End();
             ImGui.PopStyleColor();
 
 
-            if (ImGui.GetTime() - _timeLastAction > 1.0)
+
+
+            if (_hasFocus && IsMouseInsideTextArea())
             {
-                bool hasTooltipFocus = CodeFormatter.DrawTooltip(Lines[CaretLine], CaretPos, _caretPixelPos);
-                _hasFocus = _hasFocus || hasTooltipFocus;
+                if (KeyHandler.IsMouseIdle(.0))
+                {
+                    var pos = GetTextPositionFromMouse(false);
+                    if (pos)
+                        CodeFormatter.DrawTooltip(Lines[CaretLine], pos, _caretPixelPos);
+                    // _hasFocus = _hasFocus || hasTooltipFocus;
+                }
             }
 
             DrawHelpWindow();
+            double seconds = stopwatch.Elapsed.TotalSeconds;
+            _renderTimes.Enqueue(seconds);
+            while (_renderTimes.Count > 100)
+                _renderTimes.Dequeue();
         }
 
         public void DrawHelpWindow()
@@ -993,19 +1042,18 @@ namespace StationeersIC10Editor
 
         public void ResetCode(string code, bool pushUndo = true)
         {
+            code = code.Replace("\r", string.Empty);
             ClearCode(pushUndo);
             Lines.Clear();
             var lines = code.Split('\n');
+            CodeFormatter.ResetCode(code);
             foreach (var line in lines)
-            {
                 Lines.Add(line);
-                CodeFormatter.AddLine(line);
-            }
             CaretPos = new TextPosition(0, 0);
         }
 
 
-        public TextPosition GetTextPositionFromMouse()
+        public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
         {
             Vector2 mousePos = ImGui.GetMousePos();
             float charWidth = ImGui.CalcTextSize("M").x;
@@ -1014,6 +1062,11 @@ namespace StationeersIC10Editor
             int line = (int)((mousePos.y - _textAreaOrigin.y) / lineHeight);
             int column =
                 (int)((mousePos.x - _textAreaOrigin.x) / charWidth) - ICodeFormatter.LineNumberOffset;
+
+            if (!clampToTextArea && (line < 0 || line >= Lines.Count))
+            {
+                return new TextPosition(-1, -1);
+            }
 
             line = Mathf.Clamp(line, 0, Lines.Count - 1);
             string lineText = Lines[line];

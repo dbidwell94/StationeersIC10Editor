@@ -7,39 +7,451 @@ namespace StationeersIC10Editor
     using System.Text;
     using System.Collections.Generic;
     using Assets.Scripts;
+    using Assets.Scripts.Objects;
     using Assets.Scripts.Objects.Electrical;
     using Assets.Scripts.Objects.Motherboards;
     using Assets.Scripts.UI;
     using ImGuiNET;
     using UnityEngine;
 
-    public struct IC10Token
+    public enum IC10DataType
     {
+        Unknown = 0,
+        Register = 0x01,
+        Device = 0x02,
+        LogicType = 0x04,
+        Number = 0x08,
+        Label = 0x10,
+        Instruction = 0x20,
+        BatchMode = 0x40,
+        Comment = 0x80,
+        Identifier = 0x100,
+        Alias = 0x200,
+        Define = 0x400,
+    }
+
+    public class IC10Token
+    {
+        private static Dictionary<string, ScriptCommand> _instructions = new Dictionary<string, ScriptCommand>();
+        public static Dictionary<string, ScriptCommand> Instructions
+        {
+            get
+            {
+                if (_instructions.Count == 0)
+                {
+                    foreach (ScriptCommand cmd in EnumCollections.ScriptCommands.Values)
+                    {
+                        string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
+                        _instructions[cmdName] = cmd;
+                        String description = ProgrammableChip.GetCommandDescription(cmd);
+                    }
+                }
+                return _instructions;
+            }
+        }
+
+        private static HashSet<string> _registers = new HashSet<string>();
+        public static HashSet<string> Registers
+        {
+            get
+            {
+                if (_registers.Count == 0)
+                {
+                    for (int i = 0; i < 16; i++)
+                        _registers.Add($"r{i}");
+                    _registers.Add("sp");
+                    _registers.Add("ra");
+                }
+                return _registers;
+            }
+        }
+
+        private static HashSet<string> _devices = new HashSet<string>();
+        public static HashSet<string> Devices
+        {
+            get
+            {
+                if (_devices.Count == 0)
+                {
+                    for (int i = 0; i < 6; i++)
+                        _devices.Add($"d{i}");
+                    for (int i = 0; i < 16; i++)
+                    {
+                        _devices.Add($"dr{i}");
+                        _devices.Add($"drr{i}");
+                        _devices.Add($"drrr{i}");
+                        _devices.Add($"drrrr{i}");
+                    }
+                    _devices.Add("db");
+                }
+                return _devices;
+            }
+        }
+
+        private static HashSet<string> _logicTypes = new HashSet<string>();
+        public static HashSet<string> LogicTypes
+        {
+            get
+            {
+                if (_logicTypes.Count == 0)
+                {
+                    foreach (LogicType lt in EnumCollections.LogicTypes.Values)
+                        _logicTypes.Add(Enum.GetName(typeof(LogicType), lt));
+                    foreach (var batchMode in new string[] { "Average", "Sum", "Min", "Max" })
+                        _logicTypes.Add(batchMode);
+                }
+                return _logicTypes;
+            }
+        }
+
+        private static HashSet<string> _constants = new HashSet<string>();
+        public static HashSet<string> Constants
+        {
+            get
+            {
+                if (_constants.Count == 0)
+                {
+                    foreach (var constant in ProgrammableChip.AllConstants)
+                        _constants.Add(constant.Literal);
+                }
+                return _constants;
+            }
+        }
+
+
         public string Text;
         public uint Column;
         public uint Color;
         public uint Background;
+        public IC10DataType DataType;
+        public string Tooltip;
 
-        public IC10Token(string text, uint column, uint color, uint background = 0)
+        public bool IsComment => Text.StartsWith("#");
+        public bool IsLabel => Text.EndsWith(":");
+
+        public bool IsInstruction => Instructions.ContainsKey(Text);
+        public bool IsValidIdentifier => Regex.IsMatch(Text, @"^[a-zA-Z_][a-zA-Z0-9_]*$");
+
+        public IC10Token(string text, uint column, uint color = 0, uint background = 0)
         {
             Column = column;
             Text = text;
             Color = color;
             Background = background;
+            Tooltip = String.Empty;
+        }
+
+        public static List<IC10DataType> GetCommandArguments(ScriptCommand command)
+        {
+
+            var reg = IC10DataType.Register;
+            var num = IC10DataType.Number | IC10DataType.Register | IC10DataType.Label;
+            var dev = IC10DataType.Device;
+            var log = IC10DataType.LogicType;
+            var batch = IC10DataType.BatchMode | IC10DataType.Number;
+            var name = IC10DataType.Identifier;
+
+            switch (command)
+            {
+                case ScriptCommand.clr:
+                    return new List<IC10DataType> { dev };
+                case ScriptCommand.clrd:
+                    return new List<IC10DataType> { num };
+                case ScriptCommand.get:
+                    return new List<IC10DataType> { reg, dev | num, num };
+                case ScriptCommand.put:
+                    return new List<IC10DataType> { dev | num, num };
+                case ScriptCommand.getd:
+                    return new List<IC10DataType> { reg, num, num };
+                case ScriptCommand.putd:
+                    return new List<IC10DataType> { num, num, num };
+                case ScriptCommand.l:
+                    return new List<IC10DataType> { reg, dev | num, log };
+                case ScriptCommand.ld:
+                    return new List<IC10DataType> { reg, num, log };
+                case ScriptCommand.s:
+                    return new List<IC10DataType> { dev | num, log, num };
+                case ScriptCommand.sd:
+                    return new List<IC10DataType> { num, log, num };
+                case ScriptCommand.ss:
+                    return new List<IC10DataType> { num, log, num, num };
+                case ScriptCommand.sbs:
+                    return new List<IC10DataType> { num, num, log, num };
+                case ScriptCommand.lb:
+                    return new List<IC10DataType> { reg, num, log, batch };
+                case ScriptCommand.lbn:
+                    return new List<IC10DataType> { reg, num, num, log, batch };
+                case ScriptCommand.lbs:
+                    return new List<IC10DataType> { reg, num, num, log, batch };
+                case ScriptCommand.lbns:
+                    return new List<IC10DataType> { reg, num, num, num, log, batch };
+                case ScriptCommand.sb:
+                    return new List<IC10DataType> { num, log, num };
+                case ScriptCommand.sbn:
+                    return new List<IC10DataType> { num, num, log, num };
+                case ScriptCommand.ls:
+                    return new List<IC10DataType> { reg, dev | num, num, log };
+                case ScriptCommand.lr:
+                    return new List<IC10DataType> { reg, dev | num, num, num };
+                case ScriptCommand.define:
+                    return new List<IC10DataType> { num | name, IC10DataType.Number };
+                case ScriptCommand.alias:
+                    return new List<IC10DataType> { reg | name | dev, dev | reg };
+                case ScriptCommand.add:
+                case ScriptCommand.sub:
+                case ScriptCommand.slt:
+                case ScriptCommand.sgt:
+                case ScriptCommand.sle:
+                case ScriptCommand.sge:
+                case ScriptCommand.seq:
+                case ScriptCommand.sne:
+                case ScriptCommand.and:
+                case ScriptCommand.or:
+                case ScriptCommand.xor:
+                case ScriptCommand.nor:
+                case ScriptCommand.mul:
+                case ScriptCommand.div:
+                case ScriptCommand.mod:
+                case ScriptCommand.max:
+                case ScriptCommand.min:
+                case ScriptCommand.sapz:
+                case ScriptCommand.snaz:
+                case ScriptCommand.atan2:
+                case ScriptCommand.srl:
+                case ScriptCommand.sra:
+                case ScriptCommand.sll:
+                case ScriptCommand.sla:
+                case ScriptCommand.pow:
+                    return new List<IC10DataType> { reg, num, num };
+                case ScriptCommand.sap:
+                case ScriptCommand.sna:
+                case ScriptCommand.select:
+                case ScriptCommand.ext:
+                case ScriptCommand.ins:
+                    return new List<IC10DataType> { reg, num, num, num };
+                case ScriptCommand.j:
+                case ScriptCommand.jal:
+                case ScriptCommand.jr:
+                    return new List<IC10DataType> { num };
+                case ScriptCommand.bltz:
+                case ScriptCommand.bgez:
+                case ScriptCommand.blez:
+                case ScriptCommand.bgtz:
+                case ScriptCommand.bltzal:
+                case ScriptCommand.bgezal:
+                case ScriptCommand.blezal:
+                case ScriptCommand.bgtzal:
+                case ScriptCommand.brltz:
+                case ScriptCommand.brgez:
+                case ScriptCommand.brlez:
+                case ScriptCommand.brgtz:
+                case ScriptCommand.beqz:
+                case ScriptCommand.bnez:
+                case ScriptCommand.breqz:
+                case ScriptCommand.brnez:
+                case ScriptCommand.beqzal:
+                case ScriptCommand.bnezal:
+                case ScriptCommand.brnan:
+                case ScriptCommand.bnan:
+                case ScriptCommand.poke:
+                    return new List<IC10DataType> { num, num };
+                case ScriptCommand.beq:
+                case ScriptCommand.bne:
+                case ScriptCommand.beqal:
+                case ScriptCommand.bneal:
+                case ScriptCommand.breq:
+                case ScriptCommand.brne:
+                case ScriptCommand.blt:
+                case ScriptCommand.bgt:
+                case ScriptCommand.ble:
+                case ScriptCommand.bge:
+                case ScriptCommand.brlt:
+                case ScriptCommand.brgt:
+                case ScriptCommand.brle:
+                case ScriptCommand.brge:
+                case ScriptCommand.bltal:
+                case ScriptCommand.bgtal:
+                case ScriptCommand.bleal:
+                case ScriptCommand.bgeal:
+                case ScriptCommand.bapz:
+                case ScriptCommand.bnaz:
+                case ScriptCommand.brapz:
+                case ScriptCommand.brnaz:
+                case ScriptCommand.bapzal:
+                case ScriptCommand.bnazal:
+                    return new List<IC10DataType> { num, num, num };
+                case ScriptCommand.bap:
+                case ScriptCommand.bna:
+                case ScriptCommand.brap:
+                case ScriptCommand.brna:
+                case ScriptCommand.bapal:
+                case ScriptCommand.bnaal:
+                    return new List<IC10DataType> { num, num, num, num };
+                case ScriptCommand.lerp:
+                    return new List<IC10DataType> { reg, num, num };
+                case ScriptCommand.move:
+                case ScriptCommand.sqrt:
+                case ScriptCommand.round:
+                case ScriptCommand.trunc:
+                case ScriptCommand.ceil:
+                case ScriptCommand.floor:
+                case ScriptCommand.abs:
+                case ScriptCommand.log:
+                case ScriptCommand.exp:
+                case ScriptCommand.sltz:
+                case ScriptCommand.sgtz:
+                case ScriptCommand.slez:
+                case ScriptCommand.sgez:
+                case ScriptCommand.seqz:
+                case ScriptCommand.snez:
+                case ScriptCommand.sin:
+                case ScriptCommand.asin:
+                case ScriptCommand.tan:
+                case ScriptCommand.atan:
+                case ScriptCommand.cos:
+                case ScriptCommand.acos:
+                case ScriptCommand.snan:
+                case ScriptCommand.snanz:
+                case ScriptCommand.not:
+                    return new List<IC10DataType> { reg, num };
+                case ScriptCommand.rand:
+                    return new List<IC10DataType> { reg };
+                case ScriptCommand.yield:
+                case ScriptCommand.hcf:
+                    return new List<IC10DataType> { };
+                case ScriptCommand.label:
+                    return new List<IC10DataType> { dev, name };
+                case ScriptCommand.push:
+                case ScriptCommand.sleep:
+                    return new List<IC10DataType> { num };
+                case ScriptCommand.peek:
+                case ScriptCommand.pop:
+                    return new List<IC10DataType> { reg };
+                case ScriptCommand.sdse:
+                case ScriptCommand.sdns:
+                    return new List<IC10DataType> { reg, dev | num };
+                case ScriptCommand.bdse:
+                case ScriptCommand.bdns:
+                case ScriptCommand.brdse:
+                case ScriptCommand.brdns:
+                case ScriptCommand.bdseal:
+                case ScriptCommand.bdnsal:
+                    return new List<IC10DataType> { dev | num, num };
+                case ScriptCommand.rmap:
+                    return new List<IC10DataType> { reg, dev, num };
+                case ScriptCommand.bdnvl:
+                case ScriptCommand.bdnvs:
+                    return new List<IC10DataType> { num | dev, log, num };
+                default:
+                    throw new ArgumentOutOfRangeException(Localization.GetInterface("ScriptCommandCommand"), command, null);
+            }
         }
     }
 
 
-    public class IC10Line
+    public class IC10Line : List<IC10Token>
     {
-        public List<IC10Token> Tokens;
+        public int Length => this.Count == 0 ? 0 : (int)(this[Count - 1].Column + this[Count - 1].Text.Length);
 
-        public IC10Line(List<IC10Token> tokens)
+        public bool IsLabel => NumCodeTokens == 1 && this[0].IsLabel;
+        public bool IsAlias => NumCodeTokens == 3 && this[0].DataType == IC10DataType.Alias;
+        public bool IsNumAlias => IsAlias && (this[2].DataType == IC10DataType.Number || this[2].DataType == IC10DataType.Register);
+        public bool IsDevAlias => IsAlias && this[2].DataType == IC10DataType.Device;
+        public bool IsDefine => NumCodeTokens == 3 && this[0].DataType == IC10DataType.Define && this[2].DataType == IC10DataType.Number;
+        public bool IsInstruction => NumCodeTokens > 0 && this[0].IsInstruction;
+
+        public int NumCodeTokens
         {
-            Tokens = tokens;
+            get
+            {
+                if (Count == 0)
+                    return 0;
+
+                if (this[Count - 1].IsComment)
+                    return Count - 1;
+                return Count;
+            }
         }
-        
-        public int Length => Tokens.Count == 0 ? 0 : (int)(Tokens[Tokens.Count - 1].Column + Tokens[Tokens.Count - 1].Text.Length);
+
+        public static bool IsHashExpression(string text)
+        {
+            return text.StartsWith("HASH(\"") && text.EndsWith("\")");
+        }
+
+        public static bool IsStringExpression(string text)
+        {
+            return text.StartsWith("STR(\"") && text.EndsWith("\")");
+        }
+
+        public void SetTypes(Dictionary<string, IC10DataType> types)
+        {
+            foreach (var token in this)
+            {
+                token.Tooltip = String.Empty;
+
+                if (token.IsLabel)
+                    token.DataType = IC10DataType.Label;
+                else if (token.IsComment)
+                    token.DataType = IC10DataType.Comment;
+                else if (types.TryGetValue(token.Text, out IC10DataType type))
+                    token.DataType = type;
+                else if (double.TryParse(token.Text, out double number))
+                {
+                    token.DataType = IC10DataType.Number;
+                    if (Int32.TryParse(token.Text, out int hash))
+                    {
+                        var thing = Prefab.Find<Thing>(hash);
+                        if (thing != null)
+                            token.Tooltip = thing.PrefabName + "\n";
+                    }
+                }
+                else if (token.Text.StartsWith("0x") && int.TryParse(token.Text.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out int hexNumber))
+                    token.DataType = IC10DataType.Number;
+                else if (IsHashExpression(token.Text) || IsStringExpression(token.Text))
+                    token.DataType = IC10DataType.Number;
+                else
+                    token.DataType = IC10DataType.Unknown;
+
+                token.Color = IC10CodeFormatter.GetColor(token);
+            }
+
+            if (IsInstruction)
+            {
+                var arguments = IC10Token.GetCommandArguments(IC10Token.Instructions[this[0].Text]);
+                if (arguments.Count != NumCodeTokens - 1)
+                {
+                    this[0].Color = ICodeFormatter.ColorError;
+                    this[0].Tooltip += $"Error: expected {arguments.Count} arguments, got {NumCodeTokens - 1}\n";
+
+                    for (int i = arguments.Count + 1; i < NumCodeTokens; i++)
+                    {
+                        this[i].Color = ICodeFormatter.ColorError;
+                        this[i].Tooltip += this[0].Tooltip;
+                    }
+                }
+                for (int i = 0; i < Math.Min(arguments.Count, NumCodeTokens - 1); i++)
+                {
+                    var expectedType = arguments[i];
+                    var actualType = this[i + 1].DataType;
+                    if ((expectedType & actualType) == 0)
+                    {
+                        this[i + 1].Color = ICodeFormatter.ColorError;
+                        string expectedTypeStr = "";
+                        if (arguments[i] == (IC10DataType.Number | IC10DataType.Register | IC10DataType.Label))
+                            expectedTypeStr = "Number, Register or Label";
+                        else if (arguments[i] == (IC10DataType.Number | IC10DataType.Register))
+                            expectedTypeStr = "Number or Register";
+                        else if (arguments[i] == (IC10DataType.Device | IC10DataType.Number))
+                            expectedTypeStr = "Device or Number";
+                        // else
+                        //     expectedTypeStr = ""; arguments[i].ToString();
+                        this[i + 1].Tooltip += $"Error: invalid argument type '{actualType}'";
+                        if (!string.IsNullOrEmpty(expectedTypeStr))
+                            this[i + 1].Tooltip += $", expected {expectedTypeStr}";
+                    }
+                }
+            }
+        }
     }
 
     public abstract class ICodeFormatter
@@ -70,8 +482,9 @@ namespace StationeersIC10Editor
         public const int LineNumberOffset = 5;
 
         public abstract void ResetCode(string code);
-        public abstract void RemoveLine(string line);
-        public abstract void AddLine(string line);
+        public abstract void RemoveLine(int index);
+        public abstract void InsertLine(int index, string line);
+        public abstract void AppendLine(string line);
         public abstract uint GetColor(string token);
         public abstract uint GetBackground(string token);
         public abstract bool DrawTooltip(string line, TextPosition caret, Vector2 pos);
@@ -132,16 +545,19 @@ namespace StationeersIC10Editor
             return ((uint)a << 24) | ((uint)b << 16) | ((uint)g << 8) | r;
         }
 
-        public void ReplaceLine(string oldLine, string newLine)
+        public void ReplaceLine(int index, string newLine)
         {
-            RemoveLine(oldLine);
-            AddLine(newLine);
+            RemoveLine(index);
+            InsertLine(index, newLine);
         }
 
         public string TrimToken(string token)
         {
             return token.TrimEnd(':');
         }
+
+        public abstract void DrawLine(int lineIndex, string line, TextRange selection = default);
+        public abstract void DrawStatus();
 
         public static List<string> Tokenize(string text, bool keepWhitespace = false)
         {
@@ -165,12 +581,94 @@ namespace StationeersIC10Editor
             return tokens;
         }
 
-        public void DrawLine(int lineIndex, string line, TextRange selection = default)
+    }
+
+    public class IC10CodeFormatter : ICodeFormatter
+    {
+        private void DrawRegistersGrid()
+        {
+            HashSet<string> usedRegisters = new HashSet<string>();
+            HashSet<string> freeRegisters = new HashSet<string>(IC10Token.Registers);
+
+
+            foreach (var line in Code)
+            {
+                foreach (var token in line)
+                {
+                    if (token.DataType == IC10DataType.Register)
+                    {
+                        var reg = token.Text;
+                        usedRegisters.Add(token.Text);
+                        freeRegisters.Remove(reg);
+                    }
+                }
+            }
+
+            // ImGui.Text($"Used Registers: {string.Join(", ", usedRegisters)}\tFree Registers: {string.Join(", ", freeRegisters)}");
+            // Get current draw list
+            var drawList = ImGui.GetWindowDrawList();
+
+            // Start position (relative to window)
+            Vector2 startPos = ImGui.GetCursorScreenPos();
+            Vector2 windowSize = ImGui.GetWindowSize();
+
+
+            // Rectangle size and spacing
+            Vector2 rectSize = new Vector2(9, 9);
+            float spacing = 4.0f;
+
+            // startPos.x += windowSize.x - 20*rectSize.x - 19*spacing - 50.0f;
+            startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * 85.0f - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
+            startPos.y += 8.0f;
+
+            // Colors
+            uint colorUsed = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
+            uint colorFree = ImGui.GetColorU32(new Vector4(0.0f, 1.0f, 0.0f, 1.0f));
+
+            // Draw 16 rectangles in 2 rows of 8
+            for (int i = 0; i < 16; i++)
+            {
+                var reg = $"r{i}";
+
+                uint colorFill = freeRegisters.Contains(reg) ? colorFree : colorUsed;
+
+                int col = i + i / 4;
+                int row = 0;
+
+                // int row = i / 8;
+                // int col = i % 8;
+
+                // if(col > 3)
+                // col++;
+
+                Vector2 pos = new Vector2(
+                    startPos.x + col * (rectSize.x + spacing),
+                    startPos.y + row * (rectSize.y + spacing)
+                );
+
+                Vector2 posEnd = pos + rectSize;
+
+                drawList.AddRectFilled(pos, posEnd, colorFill);
+
+            }
+
+            // ImGui.Dummy(new Vector2(8 * (rectSize.x + spacing), 2 * (rectSize.y + spacing)));
+        }
+
+        public override void DrawStatus()
+        {
+            DrawRegistersGrid();
+            return;
+        }
+
+        public override void DrawLine(int lineIndex, string line, TextRange selection = default)
         {
             float charWidth = ImGui.CalcTextSize("M").x;
-            var codeComment = line.Split('#');
-            string code = codeComment[0];
-            var tokens = Tokenize(code, true);
+            // var codeComment = line.Split('#');
+            // string code = codeComment[0];
+            if (lineIndex < 0 || lineIndex >= Code.Count)
+                return;
+            var tokens = Code[lineIndex];
             Vector2 pos = ImGui.GetCursorScreenPos();
             ImGui
                 .GetWindowDrawList()
@@ -205,33 +703,60 @@ namespace StationeersIC10Editor
 
             foreach (var token in tokens)
             {
-                if (!string.IsNullOrWhiteSpace(token))
-                {
-                    uint bgColor = GetBackground(token);
-                    if (bgColor != 0)
-                    {
-                        Vector2 bgStart = new Vector2(pos.x, pos.y);
-                        Vector2 bgEnd = new Vector2(
-                            pos.x + (charWidth * token.Length),
-                            pos.y + ImGui.GetTextLineHeightWithSpacing());
-                        ImGui.GetWindowDrawList().AddRectFilled(bgStart, bgEnd, bgColor);
-                    }
-                    ImGui.GetWindowDrawList().AddText(pos, GetColor(token), token);
-                }
-
-                pos.x += charWidth * token.Length;
+                var tokenPos = new Vector2(pos.x + charWidth * token.Column, pos.y);
+                ImGui.GetWindowDrawList().AddText(tokenPos, token.Color, token.Text);
+                // if (!string.IsNullOrWhiteSpace(token))
+                // {
+                //     uint bgColor = GetBackground(token);
+                //     if (bgColor != 0)
+                //     {
+                //         Vector2 bgStart = new Vector2(pos.x, pos.y);
+                //         Vector2 bgEnd = new Vector2(
+                //             pos.x + (charWidth * token.Length),
+                //             pos.y + ImGui.GetTextLineHeightWithSpacing());
+                //         ImGui.GetWindowDrawList().AddRectFilled(bgStart, bgEnd, bgColor);
+                //     }
+                //     ImGui.GetWindowDrawList().AddText(pos, GetColor(token), token);
+                // }
+                //
+                // pos.x += charWidth * token.Length;
             }
 
-            if (codeComment.Length > 1)
+            // if (codeComment.Length > 1)
+            // {
+            //     string token = "#" + string.Join("#", codeComment, 1, codeComment.Length - 1);
+            //     ImGui.GetWindowDrawList().AddText(pos, ColorComment, token);
+            // }
+        }
+
+        public static uint GetColor(IC10Token token)
+        {
+            switch (token.DataType)
             {
-                string token = "#" + string.Join("#", codeComment, 1, codeComment.Length - 1);
-                ImGui.GetWindowDrawList().AddText(pos, ColorComment, token);
+                case IC10DataType.Number:
+                    return ColorNumber;
+                case IC10DataType.Device:
+                    return ColorDevice;
+                case IC10DataType.Register:
+                    return ColorRegister;
+                case IC10DataType.LogicType:
+                case IC10DataType.BatchMode:
+                    return ColorLogicType;
+                case IC10DataType.Instruction:
+                case IC10DataType.Define:
+                case IC10DataType.Alias:
+                    return ColorInstruction;
+                case IC10DataType.Label:
+                    return ColorLabel;
+                case IC10DataType.Comment:
+                    return ColorComment;
+                case IC10DataType.Unknown:
+                    return ColorError;
+                default:
+                    return ColorDefault;
             }
         }
-    }
 
-    public class IC10CodeFormatter : ICodeFormatter
-    {
         public static uint ColorInstruction = ColorFromHTML("#ffff00");
 
         // todo: recognize data type of tokens
@@ -245,8 +770,11 @@ namespace StationeersIC10Editor
 
         private HashSet<string> errors = new HashSet<string>(); // tokens that are marked as errors (used as alias and define for instance)
 
+        private Dictionary<string, IC10DataType> types = new Dictionary<string, IC10DataType>();
+
         private Dictionary<string, int> defines = new Dictionary<string, int>();
-        private Dictionary<string, int> aliases = new Dictionary<string, int>();
+        private Dictionary<string, int> regAliases = new Dictionary<string, int>();
+        private Dictionary<string, int> devAliases = new Dictionary<string, int>();
         private Dictionary<string, int> labels = new Dictionary<string, int>();
         private Dictionary<string, ScriptCommand> instructions = new Dictionary<string, ScriptCommand>();
         private HashSet<string> logicTypes = new HashSet<string>();
@@ -254,6 +782,8 @@ namespace StationeersIC10Editor
         private HashSet<string> devices = new HashSet<string>();
 
         private Dictionary<string, uint> builtins = new Dictionary<string, uint>();
+
+        private List<IC10Line> Code = new List<IC10Line>();
 
         private void _addBuiltin(string name, uint color, HashSet<string> hashSet = null)
         {
@@ -299,49 +829,192 @@ namespace StationeersIC10Editor
             _addBuiltin("Color.Yellow", black);
             _addBuiltin("Color.Pink", black);
             _addBuiltin("Color.Green", black);
+
+            foreach (LogicType lt in EnumCollections.LogicTypes.Values)
+                types[Enum.GetName(typeof(LogicType), lt)] = IC10DataType.LogicType;
+
+
+            foreach (ColorType col in EnumCollections.ColorTypes.Values)
+                types["Color." + Enum.GetName(typeof(ColorType), col)] = IC10DataType.Number;
+
+            foreach (var batchMode in new string[] { "Average", "Sum", "Min", "Max" })
+                types[batchMode] = IC10DataType.BatchMode;
+
+            foreach (var name in registers)
+                types[name] = IC10DataType.Register;
+
+            foreach (var name in devices)
+                types[name] = IC10DataType.Device;
+
+            foreach (var instr in instructions.Keys)
+                types[instr] = IC10DataType.Instruction;
+
+            types["define"] = IC10DataType.Define;
+            types["alias"] = IC10DataType.Alias;
+
+            Code = new List<IC10Line>();
         }
+
+        public static int FindNextWhitespace(string text, int startIndex)
+        {
+            while (startIndex < text.Length && !char.IsWhiteSpace(text[startIndex]))
+                startIndex++;
+
+            return startIndex;
+        }
+
+        public static int FindNextNonWhitespace(string text, int startIndex)
+        {
+            while (startIndex < text.Length && char.IsWhiteSpace(text[startIndex]))
+                startIndex++;
+
+            return startIndex;
+        }
+
+        public IC10Line ParseIC10Line(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return new IC10Line();
+
+            string comment = "";
+            int indexOfComment = text.IndexOf('#');
+            if (text.Contains("#"))
+            {
+                var index = text.IndexOf('#');
+                comment = text.Substring(index);
+                text = text.Substring(0, index);
+            }
+
+            var findNextNonWhitespace = new Func<int, int>((start) =>
+            {
+                int j = start;
+                while (j < text.Length && char.IsWhiteSpace(text[j]))
+                    j++;
+                return j;
+            });
+
+            int i = 0;
+
+            var tokens = new IC10Line();
+
+            while (i < text.Length)
+            {
+                int start = FindNextNonWhitespace(text, i);
+                int end = FindNextWhitespace(text, start);
+
+                if (start >= text.Length)
+                    break;
+
+                string token = text.Substring(start, end - start);
+
+                tokens.Add(new IC10Token(
+                    token,
+                    (uint)start,
+                    0));
+
+                i = end;
+            }
+
+            if (!string.IsNullOrEmpty(comment))
+                tokens.Add(new IC10Token(
+                    comment,
+                    (uint)indexOfComment,
+                    ColorComment));
+
+            tokens.SetTypes(types);
+
+            return tokens;
+        }
+
 
         public override void ResetCode(string code)
         {
             L.Info("IC10CodeFormatter - Reset");
             defines.Clear();
-            aliases.Clear();
+            regAliases.Clear();
+            devAliases.Clear();
             labels.Clear();
             errors.Clear();
+            Code.Clear();
 
+            // if (string.IsNullOrEmpty(code))
+            // {
+            //     L.Info("ResetCode: empty code");
+            //     return;
+            // }
+            //
             var lines = code.Split('\n');
+            L.Info($"ResetCode: {lines.Length} lines");
             foreach (var line in lines)
-                AddLine(line);
+                AppendLine(line);
+
         }
 
-        public void CalcIsError(string token)
+        public void UpdateDataType(string token)
         {
+            L.Info($"UpdateDataType for token: {token}");
             int count = 0;
-            if (defines.ContainsKey(token))
-                count += defines[token];
+            IC10DataType type = IC10DataType.Unknown;
 
-            if (aliases.ContainsKey(token))
+            if (defines.ContainsKey(token))
+            {
+                L.Info($"Token {token} is a define with count {defines[token]}");
+                count += defines[token];
+                type = IC10DataType.Number;
+            }
+
+            if (devAliases.ContainsKey(token))
+            {
+                L.Info($"Token {token} is a device alias with count {devAliases[token]}");
                 count += 1; // multiple aliaes are allowed, thus only count as 1
+                type = IC10DataType.Device;
+            }
+            if (regAliases.ContainsKey(token))
+            {
+                L.Info($"Token {token} is a register alias with count {regAliases[token]}");
+                count += 1; // multiple aliaes are allowed, thus only count as 1
+                type = IC10DataType.Register;
+            }
 
             if (labels.ContainsKey(TrimToken(token)))
+            {
+                L.Info($"Token {token} is a label with count {labels[token]}");
                 count += labels[token];
+                type = IC10DataType.Label;
+            }
 
             if (instructions.ContainsKey(token))
+            {
+                L.Info($"Token {token} is an instruction");
                 count += 1;
+                type = IC10DataType.Instruction;
+            }
 
             if (count > 1)
-                errors.Add(token);
-            else
-                errors.Remove(token);
+            {
+                L.Warning($"Token {token} has multiple definitions, marking as error");
+                type = IC10DataType.Unknown;
+            }
+
+            if (types.ContainsKey(token) && types[token] != type)
+            {
+                L.Warning($"Token {token} changed type from {types[token]} to {type}");
+            }
+            types[token] = type;
+
+            foreach (var line in Code)
+                line.SetTypes(types);
         }
 
         private void AddDictEntry(Dictionary<string, int> dict, string key)
         {
+            L.Info($"AddDictEntry: adding key {key} to dictionary");
             if (!dict.ContainsKey(key))
                 dict[key] = 0;
 
             dict[key]++;
-            CalcIsError(key);
+            if (dict[key] <= 2)
+                UpdateDataType(key);
         }
 
         private void RemoveDictEntry(Dictionary<string, int> dict, string key)
@@ -353,49 +1026,52 @@ namespace StationeersIC10Editor
             }
             dict[key]--;
             if (dict[key] == 0)
+            {
                 dict.Remove(key);
-
-            CalcIsError(key);
+            }
+            if (dict[key] < 2)
+                UpdateDataType(key);
         }
 
-        public override void AddLine(string line)
+        public override void AppendLine(string line)
         {
-            if (string.IsNullOrWhiteSpace(line))
-                return;
-
-            var tokens = Tokenize(line);
-
-            if (tokens.Count > 1)
-            {
-                if (tokens[0] == "define")
-                    AddDictEntry(defines, tokens[1]);
-
-                if (tokens[0] == "alias")
-                    AddDictEntry(aliases, tokens[1]);
-            }
-
-            if (tokens[0].EndsWith(":"))
-                AddDictEntry(labels, TrimToken(tokens[0]));
+            InsertLine(Code.Count, line);
         }
 
-        public override void RemoveLine(string line)
+        public override void InsertLine(int index, string line)
         {
-            if (string.IsNullOrWhiteSpace(line))
+            L.Info($"Formatter: insert line at index {index}/{Code.Count}, text: '{line}'");
+            var ic10line = ParseIC10Line(line);
+
+            Code.Insert(index, ic10line);
+
+            if (ic10line.IsLabel)
+                AddDictEntry(labels, TrimToken(ic10line[0].Text));
+            else if (ic10line.IsNumAlias)
+                AddDictEntry(regAliases, ic10line[1].Text);
+            else if (ic10line.IsDevAlias)
+                AddDictEntry(devAliases, ic10line[1].Text);
+            else if (ic10line.IsDefine)
+                AddDictEntry(defines, ic10line[1].Text);
+        }
+
+        public override void RemoveLine(int index)
+        {
+            L.Info($"Formatter: removing line at index {index}/{Code.Count}");
+            var line = Code[index];
+            Code.RemoveAt(index);
+
+            if (line.Count == 0)
                 return;
 
-            var tokens = Tokenize(line);
-
-            if (tokens.Count > 1)
-            {
-                if (tokens[0] == "define")
-                    RemoveDictEntry(defines, tokens[1]);
-
-                if (tokens[0] == "alias")
-                    RemoveDictEntry(aliases, tokens[1]);
-            }
-
-            if (tokens[0].EndsWith(":"))
-                RemoveDictEntry(labels, TrimToken(tokens[0]));
+            if (line.IsLabel)
+                RemoveDictEntry(labels, TrimToken(line[0].Text));
+            else if (line.IsNumAlias)
+                RemoveDictEntry(regAliases, line[1].Text);
+            else if (line.IsDevAlias)
+                RemoveDictEntry(devAliases, line[1].Text);
+            else if (line.IsDefine)
+                RemoveDictEntry(defines, line[1].Text);
         }
 
         public override uint GetBackground(string token)
@@ -417,7 +1093,9 @@ namespace StationeersIC10Editor
                 return ColorError;
             else if (defines.ContainsKey(token))
                 return ColorDefine;
-            else if (aliases.ContainsKey(token))
+            else if (regAliases.ContainsKey(token))
+                return ColorAlias;
+            else if (devAliases.ContainsKey(token))
                 return ColorAlias;
             else if (labels.ContainsKey(token))
                 return ColorLabel;
@@ -431,106 +1109,207 @@ namespace StationeersIC10Editor
         {
             public uint Color;
             public string Text;
+            public Vector2 Pos;
 
-            public ColoredTextSegment(string color, string text)
+            public ColoredTextSegment(string color, string text, Vector2 pos)
             {
                 Color = ColorFromHTML(color);
                 Text = text;
+                Pos = pos;
             }
         }
 
-        public static List<ColoredTextSegment> ParseAndDrawColoredText(string input)
+        public static void DrawColoredText(List<ColoredTextSegment> input)
+        {
+            var pos = ImGui.GetCursorScreenPos();
+            var list = ImGui.GetWindowDrawList();
+            foreach (var segment in input)
+                list.AddText(
+                    pos + segment.Pos,
+                    segment.Color,
+                    segment.Text);
+        }
+
+        public static void ParseAndDrawColoredText(string input)
+        {
+            float width = 0.0f;
+            DrawColoredText(ParseColoredText(input, ref width));
+        }
+
+        public static List<ColoredTextSegment> ParseColoredText(string input, ref float width)
         {
             var result = new List<ColoredTextSegment>();
             var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
             int lastIndex = 0;
+            Vector2 pos = new Vector2(0, 0);
 
             foreach (Match match in regex.Matches(input))
             {
                 if (match.Index > lastIndex)
                 {
                     string rawText = input.Substring(lastIndex, match.Index - lastIndex);
-                    result.Add(new ColoredTextSegment("#ffffff", rawText));
+                    result.Add(new ColoredTextSegment("#ffffff", rawText, pos));
+                    pos.x += ImGui.CalcTextSize(rawText).x;
                 }
 
                 string color = match.Groups[1].Value;
                 string text = match.Groups[2].Value;
-                result.Add(new ColoredTextSegment(color, text));
+                result.Add(new ColoredTextSegment(color, text, pos));
+                pos.x += ImGui.CalcTextSize(text).x;
 
                 lastIndex = match.Index + match.Length;
             }
 
             if (lastIndex < input.Length)
-                result.Add(new ColoredTextSegment("#ffffff", input.Substring(lastIndex)));
-
-            Vector2 pos = ImGui.GetCursorScreenPos();
-            foreach (var segment in result)
             {
-                ImGui.GetWindowDrawList().AddText(
-                    pos,
-                    segment.Color,
-                    segment.Text);
-                pos.x += ImGui.CalcTextSize(segment.Text).x;
+                result.Add(new ColoredTextSegment("#ffffff", input.Substring(lastIndex), pos));
+                pos.x += ImGui.CalcTextSize(input.Substring(lastIndex)).x;
             }
 
-            ImGui.NewLine();
+            // foreach (var segment in result)
+            // {
+            //     ImGui.GetWindowDrawList().AddText(
+            //         pos,
+            //         segment.Color,
+            //         segment.Text);
+            //     pos.x += ImGui.CalcTextSize(segment.Text).x;
+            // }
+
+            width = pos.x;
 
             return result;
         }
 
         public override bool DrawTooltip(string line, TextPosition caret, Vector2 pos)
         {
-            bool hasFocus = false;
-            var col = caret.Col;
-            if (col == 0)
-                return hasFocus;
-            var charBefore = line[col - 1];
-            var tokensBefore = ICodeFormatter.Tokenize(line.Substring(0, col), true);
-            if (charBefore == ' ' && tokensBefore.Count > 0)
+            if (caret.Line < 0 || caret.Line >= Code.Count)
+                return false;
+
+            var codeLine = Code[caret.Line];
+            IC10Token tokenAtCaret = null;
+            foreach (var token in codeLine)
             {
-                var instruction = tokensBefore[0];
-                while (string.IsNullOrWhiteSpace(instruction) && tokensBefore.Count > 1)
+                if (caret.Col < token.Column)
+                    break;
+
+                if (caret.Col >= token.Column && caret.Col < token.Column + token.Text.Length)
                 {
-                    tokensBefore.RemoveAt(0);
-                    instruction = tokensBefore[0];
-                }
-                if (instructions.ContainsKey(instruction))
-                {
-                    pos += new Vector2(30, 40);
-
-                    ImGui.SetNextWindowSize(new Vector2(500, 0), ImGuiCond.Once);
-                    var displaySize = ImGui.GetIO().DisplaySize;
-                    pos.x = Math.Min(pos.x, displaySize.x - 510);
-                    ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
-
-                    if (ImGui.Begin("##IC10EditorTooltip",
-                        ImGuiWindowFlags.NoNav
-                        // | ImGuiWindowFlags.NoFocusOnAppearing
-                        | ImGuiWindowFlags.NoTitleBar
-                        | ImGuiWindowFlags.NoScrollbar
-                        | ImGuiWindowFlags.NoSavedSettings
-                        | ImGuiWindowFlags.NoMove
-                        | ImGuiWindowFlags.NoCollapse
-                        | ImGuiWindowFlags.NoResize
-                        ))
-                    {
-                        hasFocus = ImGui.IsWindowFocused();
-
-                        ScriptCommand scriptCommand = instructions[instruction];
-                        String example = ProgrammableChip.GetCommandExample(scriptCommand);
-                        String description = ProgrammableChip.GetCommandDescription(scriptCommand);
-
-                        ParseAndDrawColoredText($"Instruction: <color=yellow>{instruction}</color>");
-                        ImGui.Separator();
-                        ParseAndDrawColoredText($"    {example}");
-                        ImGui.NewLine();
-                        // ImGui.Text("Description: ");
-                        ImGui.TextWrapped(description);
-                        ImGui.End();
-                    }
+                    tokenAtCaret = token;
+                    break;
                 }
             }
-            return hasFocus;
+
+            if (tokenAtCaret == null || !tokenAtCaret.IsInstruction && string.IsNullOrEmpty(tokenAtCaret.Tooltip))
+                return false;
+
+            List<ColoredTextSegment> instructionHeader = new List<ColoredTextSegment>();
+            List<ColoredTextSegment> instructionExample = new List<ColoredTextSegment>();
+            string instructionDescription = "";
+
+            float width = 0.0f;
+
+            if (tokenAtCaret.Tooltip != null)
+            {
+                float w = ImGui.CalcTextSize(tokenAtCaret.Tooltip).x + 20.0f;
+                width = Math.Min(w, 500.0f);
+            }
+
+            if (tokenAtCaret.IsInstruction)
+            {
+                var instruction = tokenAtCaret.Text;
+                ScriptCommand scriptCommand = instructions[instruction];
+                String example = ProgrammableChip.GetCommandExample(scriptCommand);
+                instructionDescription = ProgrammableChip.GetCommandDescription(scriptCommand);
+
+                float w = 0.0f;
+                instructionHeader = ParseColoredText($"Instruction: <color=yellow>{tokenAtCaret.Text}</color>", ref w);
+                width = Math.Max(width, w);
+
+                instructionExample = ParseColoredText($"    {example}", ref w);
+                width = Math.Max(width, w);
+                width = Math.Max(width + 40, 500.0f);
+            }
+
+
+            // ImGui.SetNextWindowSizeConstraints(new Vector2(500, 0), new Vector2(float.MaxValue, float.MaxValue));
+            ImGui.SetNextWindowSize(new Vector2(width, 0));
+            ImGui.BeginTooltip();
+            // ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35);
+            if (tokenAtCaret.Tooltip != null)
+            {
+                ImGui.TextWrapped(tokenAtCaret.Tooltip);
+                if (tokenAtCaret.IsInstruction)
+                    ImGui.Separator();
+            }
+            if (tokenAtCaret.IsInstruction)
+            {
+                // ImGui.SameLine();
+                DrawColoredText(instructionHeader);
+                ImGui.NewLine();
+                DrawColoredText(instructionExample);
+                // var insturctions = ParseAndDrawColoredText($"Instruction: <color=yellow>{instruction}</color>");
+                // ImGui.Separator();
+                // ParseAndDrawColoredText($"    {example}");
+                ImGui.NewLine();
+                // ImGui.Text("Description: ");
+                ImGui.TextWrapped(instructionDescription);
+            }
+            ImGui.EndTooltip();
+
+            return false;
+
+
+            // bool hasFocus = false;
+            // var col = caret.Col;
+            // if (col == 0)
+            //     return hasFocus;
+            // var charBefore = line[col - 1];
+            // var tokensBefore = ICodeFormatter.Tokenize(line.Substring(0, col), true);
+            // if (charBefore == ' ' && tokensBefore.Count > 0)
+            // {
+            //     var instruction = tokensBefore[0];
+            //     while (string.IsNullOrWhiteSpace(instruction) && tokensBefore.Count > 1)
+            //     {
+            //         tokensBefore.RemoveAt(0);
+            //         instruction = tokensBefore[0];
+            //     }
+            //     if (instructions.ContainsKey(instruction))
+            //     {
+            //         pos += new Vector2(30, 40);
+            //
+            //         ImGui.SetNextWindowSize(new Vector2(500, 0), ImGuiCond.Once);
+            //         var displaySize = ImGui.GetIO().DisplaySize;
+            //         pos.x = Math.Min(pos.x, displaySize.x - 510);
+            //         ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
+            //
+            //         if (ImGui.Begin("##IC10EditorTooltip",
+            //             ImGuiWindowFlags.NoNav
+            //             // | ImGuiWindowFlags.NoFocusOnAppearing
+            //             | ImGuiWindowFlags.NoTitleBar
+            //             | ImGuiWindowFlags.NoScrollbar
+            //             | ImGuiWindowFlags.NoSavedSettings
+            //             | ImGuiWindowFlags.NoMove
+            //             | ImGuiWindowFlags.NoCollapse
+            //             | ImGuiWindowFlags.NoResize
+            //             ))
+            //         {
+            //             hasFocus = ImGui.IsWindowFocused();
+            //
+            //             ScriptCommand scriptCommand = instructions[instruction];
+            //             String example = ProgrammableChip.GetCommandExample(scriptCommand);
+            //             String description = ProgrammableChip.GetCommandDescription(scriptCommand);
+            //
+            //             ParseAndDrawColoredText($"Instruction: <color=yellow>{instruction}</color>");
+            //             ImGui.Separator();
+            //             ParseAndDrawColoredText($"    {example}");
+            //             ImGui.NewLine();
+            //             // ImGui.Text("Description: ");
+            //             ImGui.TextWrapped(description);
+            //             ImGui.End();
+            //         }
+            //     }
+            // }
+            // return hasFocus;
         }
     }
 }

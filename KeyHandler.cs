@@ -3,6 +3,7 @@ namespace StationeersIC10Editor
     using System;
     using ImGuiNET;
     using Assets.Scripts;
+    using Assets.Scripts.Objects;
     using Assets.Scripts.UI;
     using UnityEngine;
 
@@ -14,11 +15,15 @@ namespace StationeersIC10Editor
 
     public class KeyHandler
     {
+        public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
+
         IC10Editor Editor;
         public KeyMode Mode = KeyMode.Insert;
 
         private double _timeLastEscape = 0.0;
         private bool _isSelecting = false;
+        private double _timeLastMouseMove = 0.0;
+        private Vector2 _lastMousePos = new Vector2(0, 0);
 
         TextPosition CaretPos
         {
@@ -54,8 +59,20 @@ namespace StationeersIC10Editor
             return Editor.Move(pos, action);
         }
 
+        public bool IsMouseIdle(double idleTime)
+        {
+            return (ImGui.GetTime() - _timeLastMouseMove) >= idleTime;
+        }
+
         public void HandleMouse(bool ctrlDown, bool shiftDown)
         {
+            var mousePos = ImGui.GetMousePos();
+            if (mousePos != _lastMousePos)
+            {
+                _timeLastMouseMove = ImGui.GetTime();
+                _lastMousePos = mousePos;
+            }
+
             if (Editor.IsMouseInsideTextArea())
             {
                 if (ctrlDown)
@@ -63,8 +80,18 @@ namespace StationeersIC10Editor
                     if (ImGui.IsMouseReleased(0))
                     {
                         // open stationpedia page for word under mouse
-                        string word = "Thing" + Editor.GetCode(Editor.GetWordAt(Editor.GetTextPositionFromMouse()));
-                        Stationpedia._linkIdLookup.TryGetValue(word, out var page);
+                        var name = Editor.GetCode(Editor.GetWordAt(Editor.GetTextPositionFromMouse()));
+
+                        if (Int32.TryParse(name, out var hash))
+                        {
+                            var thing = Prefab.Find<Thing>(hash);
+                            if (thing == null) return;
+                            name = thing.PrefabName;
+                        }
+
+                        name = "Thing" + name;
+
+                        Stationpedia._linkIdLookup.TryGetValue(name, out var page);
                         if (page != null)
                             Stationpedia.Instance.OpenPageByKey(page.Key);
                     }
@@ -189,7 +216,7 @@ namespace StationeersIC10Editor
 
             var io = ImGui.GetIO();
 
-            if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+            if (VimEnabled && ImGui.IsKeyPressed(ImGuiKey.Escape))
             {
                 Mode = KeyMode.Normal;
                 if (CaretCol > 0)
@@ -214,7 +241,7 @@ namespace StationeersIC10Editor
                     int prevLineLength = Editor.Lines[CaretLine - 1].Length;
                     CurrentLine = Editor.Lines[CaretLine - 1] + CurrentLine;
                     Editor.Lines.RemoveAt(CaretLine - 1);
-                    Editor.CodeFormatter.RemoveLine(Editor.Lines[CaretLine - 1]);
+                    Editor.CodeFormatter.RemoveLine(CaretLine - 1);
                     CaretLine--;
                     CaretCol = prevLineLength;
                 }
@@ -233,7 +260,7 @@ namespace StationeersIC10Editor
                     // Merge with next line
                     CurrentLine = CurrentLine + Editor.Lines[CaretLine + 1];
                     Editor.Lines.RemoveAt(CaretLine + 1);
-                    Editor.CodeFormatter.RemoveLine(Editor.Lines[CaretLine]);
+                    Editor.CodeFormatter.RemoveLine(CaretLine);
                 }
             }
 
@@ -243,6 +270,7 @@ namespace StationeersIC10Editor
                 string newLine = CurrentLine.Substring(CaretCol);
                 CurrentLine = CurrentLine.Substring(0, CaretCol);
                 Editor.Lines.Insert(CaretLine + 1, newLine);
+                Editor.CodeFormatter.InsertLine(CaretLine + 1, newLine);
                 CaretPos = new TextPosition(CaretLine + 1, 0);
                 Editor.ScrollToCaret += 1; // we need to scroll to caret in the next two frames, one for updating the scroll area, one to actually scroll there
             }

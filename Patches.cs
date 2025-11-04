@@ -61,8 +61,17 @@ namespace StationeersIC10Editor
         [HarmonyPostfix]
         static void ImguiCreativeSpawnMenu_Draw_Postfix()
         {
-            foreach (var editor in AllEditors)
-                editor.Draw();
+            try
+            {
+                foreach (var editor in AllEditors)
+                    editor.Draw();
+            }
+            catch (System.Exception e)
+            {
+                L.Error("Exception in Editor Draw:");
+                L.Error(e.ToString());
+            }
+
         }
 
         [HarmonyPatch(typeof(EditorLineOfCode))]

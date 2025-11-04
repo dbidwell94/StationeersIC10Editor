@@ -3,6 +3,7 @@ namespace StationeersIC10Editor
     using UnityEngine;
     using System;
     using BepInEx;
+    using BepInEx.Configuration;
     using HarmonyLib;
     using System.Collections;
 
@@ -40,6 +41,17 @@ namespace StationeersIC10Editor
         public const string PluginVersion = VersionInfo.Version;
         private Harmony _harmony;
 
+        public static ConfigEntry<bool> VimBindings;
+        public static ConfigEntry<bool> EnforceLineLimit;
+        public static ConfigEntry<bool> EnforceBytesLimit;
+
+        private void BindAllConfigs()
+        {
+            VimBindings = Config.Bind("General", "Enable VIM bindings (experimental!)", false, "Enable VIM bindings, this is an experimental feature");
+            EnforceLineLimit = Config.Bind("General", "Enforce 128 line limit", true, "Enforce the 128 line limit of IC10 programs");
+            EnforceBytesLimit = Config.Bind("General", "Enforce 4KB size limit", true, "Enforce the 4KB byte size of IC10 programs");
+        }
+
         private void Awake()
         {
             try
@@ -47,6 +59,7 @@ namespace StationeersIC10Editor
                 L.SetLogger(this.Logger);
                 this.Logger.LogInfo(
                     $"Awake ${PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}");
+                BindAllConfigs();
 
                 _harmony = new Harmony(PluginGuid);
                 _harmony.PatchAll();
