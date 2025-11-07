@@ -1,22 +1,22 @@
 namespace StationeersIC10Editor
 {
     using System;
-    using UI.Tooltips;
+    using System.Reflection;
+    using System.Runtime.CompilerServices;
     using System.Text.RegularExpressions;
-    using Assets.Scripts.Util;
     using System.Text;
     using System.Collections.Generic;
     using Assets.Scripts;
     using Assets.Scripts.Objects;
     using Assets.Scripts.Objects.Electrical;
     using Assets.Scripts.Objects.Motherboards;
-    using Assets.Scripts.UI;
     using ImGuiNET;
     using UnityEngine;
 
-    public enum IC10DataType
+
+    public enum DataType
     {
-        Unknown = 0,
+        Unknown = 0x00,
         Register = 0x01,
         Device = 0x02,
         LogicType = 0x04,
@@ -28,23 +28,238 @@ namespace StationeersIC10Editor
         Identifier = 0x100,
         Alias = 0x200,
         Define = 0x400,
+        LogicSlotType = 0x800,
+        ReagentMode = 0x1000,
+    }
+
+    public struct ArgType
+    {
+        uint Value = 0;
+
+        public ArgType()
+        { }
+
+        public bool Has(DataType b)
+        {
+            return (Value & (uint)b) != 0;
+        }
+
+        public void Add(DataType b, DataType b2 = 0, DataType b3 = 0)
+        {
+            Value |= (uint)b;
+            Value |= (uint)b2;
+            Value |= (uint)b3;
+        }
+
+        public string Description
+        {
+            get
+            {
+                List<DataType> types = new List<DataType>();
+
+                foreach (DataType dt in Enum.GetValues(typeof(DataType)))
+                {
+                    if ((Value & (uint)dt) != 0)
+                        types.Add(dt);
+                }
+
+                if (types.Count == 0)
+                    return "Unknown";
+
+                if (types.Count == 1)
+                    return types[0].ToString();
+
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < types.Count; i++)
+                {
+                    sb.Append(types[i].ToString());
+                    if (i < types.Count - 1)
+                        sb.Append(" or ");
+
+                }
+
+                return sb.ToString();
+            }
+
+        }
+    }
+
+    public struct ColoredTextSegment
+    {
+        public uint Color;
+        public string Text;
+        public Vector2 Pos;
+
+        public ColoredTextSegment(string color, string text, Vector2 pos)
+        {
+            Color = ICodeFormatter.ColorFromHTML(color);
+            Text = text;
+            Pos = pos;
+        }
+    }
+
+
+    public class IC10OpCode
+    {
+        public string Name = String.Empty;
+        public string Description = String.Empty;
+        public List<ArgType> ArgumentTypes = new List<ArgType>();
+        public bool IsBuiltin = true;
+
+        public float TooltipWidth = 0.0f;
+        public List<ColoredTextSegment> TooltipHeader = new List<ColoredTextSegment>();
+        public List<ColoredTextSegment> TooltipExample = new List<ColoredTextSegment>();
+
+
+        public IC10OpCode(string name, string description, string example)
+        {
+            IsBuiltin = true;
+            Name = name;
+            Description = description;
+            float w = 0.0f;
+            float wmax = 0.0f;
+            TooltipHeader = IC10CodeFormatter.ParseColoredText($"Instruction: <color=yellow>{name}</color>", ref wmax);
+            TooltipExample = IC10CodeFormatter.ParseColoredText($"    {example}", ref w);
+            wmax = Math.Max(wmax, w);
+            TooltipWidth = Math.Max(w + 40, 500.0f);
+
+            int i = 1;
+            while (i < TooltipExample.Count)
+            {
+                var s = TooltipExample[i].Text;
+                if (s.Contains("(") || s.Contains(")"))
+                {
+                    i++;
+                    continue;
+                }
+
+                while (i + 2 < TooltipExample.Count && TooltipExample[i + 1].Text.Trim() == "|")
+                {
+                    s += TooltipExample[i + 1].Text;
+                    s += TooltipExample[i + 2].Text;
+                    i += 2;
+                }
+
+                i++;
+
+                ArgType argType = new ArgType();
+
+                foreach (var token in s.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var trimmed = token.Trim().TrimEnd(',', ')');
+                    switch (trimmed)
+                    {
+                        case "r?":
+                            argType.Add(DataType.Register);
+                            if (ArgumentTypes.Count > 0)
+                                argType.Add(DataType.Number, DataType.Label);
+                            break;
+                        case "d?":
+                            argType.Add(DataType.Device);
+                            break;
+                        case "id":
+                        case "num":
+                        case "int":
+                        case "deviceHash":
+                        case "nameHash":
+                        case "slotIndex":
+                            argType.Add(DataType.Number, DataType.Label);
+                            break;
+                        case "logicType":
+                            argType.Add(DataType.LogicType);
+                            break;
+                        case "logicSlotType":
+                            argType.Add(DataType.LogicSlotType);
+                            break;
+                        case "batchMode":
+                            argType.Add(DataType.BatchMode);
+                            break;
+                        case "reagentMode":
+                            argType.Add(DataType.BatchMode);
+                            break;
+                        case "str":
+                            argType.Add(DataType.Identifier, DataType.Number, DataType.Label);
+                            break;
+                        default:
+                            L.Warning($"Unknown argument token '{trimmed}' in opcode {name}");
+                            break;
+                    }
+                }
+
+                ArgumentTypes.Add(argType);
+            }
+        }
+
+        public void DrawTooltip()
+        {
+            IC10CodeFormatter.DrawColoredText(TooltipHeader);
+            ImGui.NewLine();
+            IC10CodeFormatter.DrawColoredText(TooltipExample);
+            ImGui.NewLine();
+            ImGui.NewLine();
+            ImGui.TextWrapped(Description);
+        }
     }
 
     public class IC10Token
     {
-        private static Dictionary<string, ScriptCommand> _instructions = new Dictionary<string, ScriptCommand>();
-        public static Dictionary<string, ScriptCommand> Instructions
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        private static void _initInstructions()
+        {
+            foreach (ScriptCommand cmd in EnumCollections.ScriptCommands.Values)
+            {
+                string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
+                var description = ProgrammableChip.GetCommandDescription(cmd);
+                var example = ProgrammableChip.GetCommandExample(cmd);
+                _instructions[cmdName] = new IC10OpCode(cmdName, description, example);
+            }
+            Assembly[] assemblies = System.AppDomain.CurrentDomain.GetAssemblies();
+            foreach (var assembly in assemblies)
+            {
+                string message = assembly.GetName().Name;
+                if (message.Equals("IC10Extender"))
+                {
+                    var opcodesObj = assembly.GetType("IC10_Extender.IC10Extender")?
+    .GetProperty("OpCodes", BindingFlags.Public | BindingFlags.Static)?
+    .GetValue(null);
+
+                    if (opcodesObj == null)
+                    {
+                        L.Warning("IC10Extender: could not get OpCodes property");
+                        continue;
+                    }
+
+
+                    var keysProp = opcodesObj.GetType().GetProperty("Keys");
+                    var opcodes = keysProp?.GetValue(opcodesObj) as IEnumerable<string>;
+                    if (opcodes == null) continue;
+
+                    var indexer = opcodesObj.GetType().GetProperty("Item");
+
+                    foreach (var name in opcodes)
+                    {
+
+                        var opcode = indexer.GetValue(opcodesObj, new[] { name });
+                        L.Info($"IC10Extender: Found opcode {name}, type: {opcode.GetType().FullName}");
+                        var example = name + " " + opcode.GetType().GetMethod("CommandExample", new[] { typeof(int), typeof(string) })?.Invoke(opcode, new object[] { 0, null }) as string;
+                        L.Info($"  Example: {example}");
+                        var description = opcode.GetType().GetMethod("Description")?.Invoke(opcode, null) as string;
+                        L.Info($"  Description: {description}");
+                        _instructions[name] = new IC10OpCode(name, description, example);
+                    }
+                    break;
+                }
+            }
+        }
+        private static Dictionary<string, IC10OpCode> _instructions = new Dictionary<string, IC10OpCode>();
+        public static Dictionary<string, IC10OpCode> Instructions
         {
             get
             {
                 if (_instructions.Count == 0)
                 {
-                    foreach (ScriptCommand cmd in EnumCollections.ScriptCommands.Values)
-                    {
-                        string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
-                        _instructions[cmdName] = cmd;
-                        String description = ProgrammableChip.GetCommandDescription(cmd);
-                    }
+                    _initInstructions();
                 }
                 return _instructions;
             }
@@ -123,7 +338,7 @@ namespace StationeersIC10Editor
         public uint Column;
         public uint Color;
         public uint Background;
-        public IC10DataType DataType;
+        public DataType DataType;
         public string Tooltip;
 
         public bool IsComment => Text.StartsWith("#");
@@ -141,211 +356,6 @@ namespace StationeersIC10Editor
             Tooltip = String.Empty;
         }
 
-        public static List<IC10DataType> GetCommandArguments(ScriptCommand command)
-        {
-
-            var reg = IC10DataType.Register;
-            var num = IC10DataType.Number | IC10DataType.Register | IC10DataType.Label;
-            var dev = IC10DataType.Device;
-            var log = IC10DataType.LogicType;
-            var batch = IC10DataType.BatchMode | IC10DataType.Number;
-            var name = IC10DataType.Identifier;
-
-            switch (command)
-            {
-                case ScriptCommand.clr:
-                    return new List<IC10DataType> { dev };
-                case ScriptCommand.clrd:
-                    return new List<IC10DataType> { num };
-                case ScriptCommand.get:
-                    return new List<IC10DataType> { reg, dev | num, num };
-                case ScriptCommand.put:
-                    return new List<IC10DataType> { dev | num, num };
-                case ScriptCommand.getd:
-                    return new List<IC10DataType> { reg, num, num };
-                case ScriptCommand.putd:
-                    return new List<IC10DataType> { num, num, num };
-                case ScriptCommand.l:
-                    return new List<IC10DataType> { reg, dev | num, log };
-                case ScriptCommand.ld:
-                    return new List<IC10DataType> { reg, num, log };
-                case ScriptCommand.s:
-                    return new List<IC10DataType> { dev | num, log, num };
-                case ScriptCommand.sd:
-                    return new List<IC10DataType> { num, log, num };
-                case ScriptCommand.ss:
-                    return new List<IC10DataType> { num, log, num, num };
-                case ScriptCommand.sbs:
-                    return new List<IC10DataType> { num, num, log, num };
-                case ScriptCommand.lb:
-                    return new List<IC10DataType> { reg, num, log, batch };
-                case ScriptCommand.lbn:
-                    return new List<IC10DataType> { reg, num, num, log, batch };
-                case ScriptCommand.lbs:
-                    return new List<IC10DataType> { reg, num, num, log, batch };
-                case ScriptCommand.lbns:
-                    return new List<IC10DataType> { reg, num, num, num, log, batch };
-                case ScriptCommand.sb:
-                    return new List<IC10DataType> { num, log, num };
-                case ScriptCommand.sbn:
-                    return new List<IC10DataType> { num, num, log, num };
-                case ScriptCommand.ls:
-                    return new List<IC10DataType> { reg, dev | num, num, log };
-                case ScriptCommand.lr:
-                    return new List<IC10DataType> { reg, dev | num, num, num };
-                case ScriptCommand.define:
-                    return new List<IC10DataType> { num | name, IC10DataType.Number };
-                case ScriptCommand.alias:
-                    return new List<IC10DataType> { reg | name | dev, dev | reg };
-                case ScriptCommand.add:
-                case ScriptCommand.sub:
-                case ScriptCommand.slt:
-                case ScriptCommand.sgt:
-                case ScriptCommand.sle:
-                case ScriptCommand.sge:
-                case ScriptCommand.seq:
-                case ScriptCommand.sne:
-                case ScriptCommand.and:
-                case ScriptCommand.or:
-                case ScriptCommand.xor:
-                case ScriptCommand.nor:
-                case ScriptCommand.mul:
-                case ScriptCommand.div:
-                case ScriptCommand.mod:
-                case ScriptCommand.max:
-                case ScriptCommand.min:
-                case ScriptCommand.sapz:
-                case ScriptCommand.snaz:
-                case ScriptCommand.atan2:
-                case ScriptCommand.srl:
-                case ScriptCommand.sra:
-                case ScriptCommand.sll:
-                case ScriptCommand.sla:
-                case ScriptCommand.pow:
-                    return new List<IC10DataType> { reg, num, num };
-                case ScriptCommand.sap:
-                case ScriptCommand.sna:
-                case ScriptCommand.select:
-                case ScriptCommand.ext:
-                case ScriptCommand.ins:
-                    return new List<IC10DataType> { reg, num, num, num };
-                case ScriptCommand.j:
-                case ScriptCommand.jal:
-                case ScriptCommand.jr:
-                    return new List<IC10DataType> { num };
-                case ScriptCommand.bltz:
-                case ScriptCommand.bgez:
-                case ScriptCommand.blez:
-                case ScriptCommand.bgtz:
-                case ScriptCommand.bltzal:
-                case ScriptCommand.bgezal:
-                case ScriptCommand.blezal:
-                case ScriptCommand.bgtzal:
-                case ScriptCommand.brltz:
-                case ScriptCommand.brgez:
-                case ScriptCommand.brlez:
-                case ScriptCommand.brgtz:
-                case ScriptCommand.beqz:
-                case ScriptCommand.bnez:
-                case ScriptCommand.breqz:
-                case ScriptCommand.brnez:
-                case ScriptCommand.beqzal:
-                case ScriptCommand.bnezal:
-                case ScriptCommand.brnan:
-                case ScriptCommand.bnan:
-                case ScriptCommand.poke:
-                    return new List<IC10DataType> { num, num };
-                case ScriptCommand.beq:
-                case ScriptCommand.bne:
-                case ScriptCommand.beqal:
-                case ScriptCommand.bneal:
-                case ScriptCommand.breq:
-                case ScriptCommand.brne:
-                case ScriptCommand.blt:
-                case ScriptCommand.bgt:
-                case ScriptCommand.ble:
-                case ScriptCommand.bge:
-                case ScriptCommand.brlt:
-                case ScriptCommand.brgt:
-                case ScriptCommand.brle:
-                case ScriptCommand.brge:
-                case ScriptCommand.bltal:
-                case ScriptCommand.bgtal:
-                case ScriptCommand.bleal:
-                case ScriptCommand.bgeal:
-                case ScriptCommand.bapz:
-                case ScriptCommand.bnaz:
-                case ScriptCommand.brapz:
-                case ScriptCommand.brnaz:
-                case ScriptCommand.bapzal:
-                case ScriptCommand.bnazal:
-                    return new List<IC10DataType> { num, num, num };
-                case ScriptCommand.bap:
-                case ScriptCommand.bna:
-                case ScriptCommand.brap:
-                case ScriptCommand.brna:
-                case ScriptCommand.bapal:
-                case ScriptCommand.bnaal:
-                    return new List<IC10DataType> { num, num, num, num };
-                case ScriptCommand.lerp:
-                    return new List<IC10DataType> { reg, num, num };
-                case ScriptCommand.move:
-                case ScriptCommand.sqrt:
-                case ScriptCommand.round:
-                case ScriptCommand.trunc:
-                case ScriptCommand.ceil:
-                case ScriptCommand.floor:
-                case ScriptCommand.abs:
-                case ScriptCommand.log:
-                case ScriptCommand.exp:
-                case ScriptCommand.sltz:
-                case ScriptCommand.sgtz:
-                case ScriptCommand.slez:
-                case ScriptCommand.sgez:
-                case ScriptCommand.seqz:
-                case ScriptCommand.snez:
-                case ScriptCommand.sin:
-                case ScriptCommand.asin:
-                case ScriptCommand.tan:
-                case ScriptCommand.atan:
-                case ScriptCommand.cos:
-                case ScriptCommand.acos:
-                case ScriptCommand.snan:
-                case ScriptCommand.snanz:
-                case ScriptCommand.not:
-                    return new List<IC10DataType> { reg, num };
-                case ScriptCommand.rand:
-                    return new List<IC10DataType> { reg };
-                case ScriptCommand.yield:
-                case ScriptCommand.hcf:
-                    return new List<IC10DataType> { };
-                case ScriptCommand.label:
-                    return new List<IC10DataType> { dev, name };
-                case ScriptCommand.push:
-                case ScriptCommand.sleep:
-                    return new List<IC10DataType> { num };
-                case ScriptCommand.peek:
-                case ScriptCommand.pop:
-                    return new List<IC10DataType> { reg };
-                case ScriptCommand.sdse:
-                case ScriptCommand.sdns:
-                    return new List<IC10DataType> { reg, dev | num };
-                case ScriptCommand.bdse:
-                case ScriptCommand.bdns:
-                case ScriptCommand.brdse:
-                case ScriptCommand.brdns:
-                case ScriptCommand.bdseal:
-                case ScriptCommand.bdnsal:
-                    return new List<IC10DataType> { dev | num, num };
-                case ScriptCommand.rmap:
-                    return new List<IC10DataType> { reg, dev, num };
-                case ScriptCommand.bdnvl:
-                case ScriptCommand.bdnvs:
-                    return new List<IC10DataType> { num | dev, log, num };
-                default:
-                    throw new ArgumentOutOfRangeException(Localization.GetInterface("ScriptCommandCommand"), command, null);
-            }
-        }
     }
 
 
@@ -354,10 +364,10 @@ namespace StationeersIC10Editor
         public int Length => this.Count == 0 ? 0 : (int)(this[Count - 1].Column + this[Count - 1].Text.Length);
 
         public bool IsLabel => NumCodeTokens == 1 && this[0].IsLabel;
-        public bool IsAlias => NumCodeTokens == 3 && this[0].DataType == IC10DataType.Alias;
-        public bool IsNumAlias => IsAlias && (this[2].DataType == IC10DataType.Number || this[2].DataType == IC10DataType.Register);
-        public bool IsDevAlias => IsAlias && this[2].DataType == IC10DataType.Device;
-        public bool IsDefine => NumCodeTokens == 3 && this[0].DataType == IC10DataType.Define && this[2].DataType == IC10DataType.Number;
+        public bool IsAlias => NumCodeTokens == 3 && this[0].DataType == DataType.Alias;
+        public bool IsNumAlias => IsAlias && (this[2].DataType == DataType.Number || this[2].DataType == DataType.Register);
+        public bool IsDevAlias => IsAlias && this[2].DataType == DataType.Device;
+        public bool IsDefine => NumCodeTokens == 3 && this[0].DataType == DataType.Define && this[2].DataType == DataType.Number;
         public bool IsInstruction => NumCodeTokens > 0 && this[0].IsInstruction;
 
         public int NumCodeTokens
@@ -383,21 +393,21 @@ namespace StationeersIC10Editor
             return text.StartsWith("STR(\"") && text.EndsWith("\")");
         }
 
-        public void SetTypes(Dictionary<string, IC10DataType> types)
+        public void SetTypes(Dictionary<string, DataType> types)
         {
             foreach (var token in this)
             {
                 token.Tooltip = String.Empty;
 
                 if (token.IsLabel)
-                    token.DataType = IC10DataType.Label;
+                    token.DataType = DataType.Number;
                 else if (token.IsComment)
-                    token.DataType = IC10DataType.Comment;
-                else if (types.TryGetValue(token.Text, out IC10DataType type))
+                    token.DataType = DataType.Comment;
+                else if (types.TryGetValue(token.Text, out DataType type))
                     token.DataType = type;
                 else if (double.TryParse(token.Text, out double number))
                 {
-                    token.DataType = IC10DataType.Number;
+                    token.DataType = DataType.Number;
                     if (Int32.TryParse(token.Text, out int hash))
                     {
                         var thing = Prefab.Find<Thing>(hash);
@@ -406,18 +416,20 @@ namespace StationeersIC10Editor
                     }
                 }
                 else if (token.Text.StartsWith("0x") && int.TryParse(token.Text.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out int hexNumber))
-                    token.DataType = IC10DataType.Number;
+                    token.DataType = DataType.Number;
                 else if (IsHashExpression(token.Text) || IsStringExpression(token.Text))
-                    token.DataType = IC10DataType.Number;
+                    token.DataType = DataType.Number;
                 else
-                    token.DataType = IC10DataType.Unknown;
+                    token.DataType = DataType.Unknown;
 
                 token.Color = IC10CodeFormatter.GetColor(token);
             }
 
             if (IsInstruction)
             {
-                var arguments = IC10Token.GetCommandArguments(IC10Token.Instructions[this[0].Text]);
+                var opcode = IC10Token.Instructions[this[0].Text];
+                var arguments = opcode.ArgumentTypes;
+
                 if (arguments.Count != NumCodeTokens - 1)
                 {
                     this[0].Color = ICodeFormatter.ColorError;
@@ -433,21 +445,11 @@ namespace StationeersIC10Editor
                 {
                     var expectedType = arguments[i];
                     var actualType = this[i + 1].DataType;
-                    if ((expectedType & actualType) == 0)
+                    if (!expectedType.Has(actualType))
                     {
                         this[i + 1].Color = ICodeFormatter.ColorError;
-                        string expectedTypeStr = "";
-                        if (arguments[i] == (IC10DataType.Number | IC10DataType.Register | IC10DataType.Label))
-                            expectedTypeStr = "Number, Register or Label";
-                        else if (arguments[i] == (IC10DataType.Number | IC10DataType.Register))
-                            expectedTypeStr = "Number or Register";
-                        else if (arguments[i] == (IC10DataType.Device | IC10DataType.Number))
-                            expectedTypeStr = "Device or Number";
-                        // else
-                        //     expectedTypeStr = ""; arguments[i].ToString();
-                        this[i + 1].Tooltip += $"Error: invalid argument type '{actualType}'";
-                        if (!string.IsNullOrEmpty(expectedTypeStr))
-                            this[i + 1].Tooltip += $", expected {expectedTypeStr}";
+                        string expectedTypeStr = arguments[i].Description;
+                        this[i + 1].Tooltip += $"Error: invalid argument type {actualType}, expected {expectedTypeStr}";
                     }
                 }
             }
@@ -595,7 +597,7 @@ namespace StationeersIC10Editor
             {
                 foreach (var token in line)
                 {
-                    if (token.DataType == IC10DataType.Register)
+                    if (token.DataType == DataType.Register)
                     {
                         var reg = token.Text;
                         usedRegisters.Add(token.Text);
@@ -614,6 +616,7 @@ namespace StationeersIC10Editor
 
             startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * 85.0f - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
             startPos.y += 8.0f;
+            // startPos.y -= ImGui.GetTextLineHeightWithSpacing() + 4.0f;
 
             uint colorUsed = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
             uint colorFree = ImGui.GetColorU32(new Vector4(0.0f, 1.0f, 0.0f, 1.0f));
@@ -625,7 +628,8 @@ namespace StationeersIC10Editor
                 uint color = freeRegisters.Contains($"r{i}") ? colorFree : colorUsed;
                 int xShift = i + i / 4; // add extra space every 4 registers
                 startPos.x = x0 + xShift * (rectSize.x + spacing);
-                drawList.AddRectFilled(startPos, startPos + rectSize, color);
+                // drawList.AddRectFilled(startPos, startPos + rectSize, color, 2);
+                drawList.AddCircleFilled(startPos + rectSize / 2, rectSize.x / 2, color, 12);
             }
         }
 
@@ -685,24 +689,24 @@ namespace StationeersIC10Editor
         {
             switch (token.DataType)
             {
-                case IC10DataType.Number:
+                case DataType.Number:
                     return ColorNumber;
-                case IC10DataType.Device:
+                case DataType.Device:
                     return ColorDevice;
-                case IC10DataType.Register:
+                case DataType.Register:
                     return ColorRegister;
-                case IC10DataType.LogicType:
-                case IC10DataType.BatchMode:
+                case DataType.LogicType:
+                case DataType.BatchMode:
                     return ColorLogicType;
-                case IC10DataType.Instruction:
-                case IC10DataType.Define:
-                case IC10DataType.Alias:
+                case DataType.Instruction:
+                case DataType.Define:
+                case DataType.Alias:
                     return ColorInstruction;
-                case IC10DataType.Label:
+                case DataType.Label:
                     return ColorLabel;
-                case IC10DataType.Comment:
+                case DataType.Comment:
                     return ColorComment;
-                case IC10DataType.Unknown:
+                case DataType.Unknown:
                     return ColorError;
                 default:
                     return ColorDefault;
@@ -722,13 +726,13 @@ namespace StationeersIC10Editor
 
         private HashSet<string> errors = new HashSet<string>(); // tokens that are marked as errors (used as alias and define for instance)
 
-        private Dictionary<string, IC10DataType> types = new Dictionary<string, IC10DataType>();
+        private Dictionary<string, DataType> types = new Dictionary<string, DataType>();
 
         private Dictionary<string, int> defines = new Dictionary<string, int>();
         private Dictionary<string, int> regAliases = new Dictionary<string, int>();
         private Dictionary<string, int> devAliases = new Dictionary<string, int>();
         private Dictionary<string, int> labels = new Dictionary<string, int>();
-        private Dictionary<string, ScriptCommand> instructions = new Dictionary<string, ScriptCommand>();
+        // private Dictionary<string, ScriptCommand> instructions = new Dictionary<string, ScriptCommand>();
         private HashSet<string> logicTypes = new HashSet<string>();
         private HashSet<string> registers = new HashSet<string>();
         private HashSet<string> devices = new HashSet<string>();
@@ -747,12 +751,12 @@ namespace StationeersIC10Editor
         public IC10CodeFormatter()
         {
             L.Info("IC10CodeFormatter - Constructor");
-            foreach (ScriptCommand cmd in EnumCollections.ScriptCommands.Values)
-            {
-                string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
-                instructions[cmdName] = cmd;
-                builtins[cmdName] = ColorInstruction;
-            }
+            // foreach (ScriptCommand cmd in EnumCollections.ScriptCommands.Values)
+            // {
+            //     string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
+            //     instructions[cmdName] = cmd;
+            //     builtins[cmdName] = ColorInstruction;
+            // }
 
             foreach (LogicType lt in EnumCollections.LogicTypes.Values)
                 _addBuiltin(Enum.GetName(typeof(LogicType), lt), ColorLogicType, logicTypes);
@@ -783,26 +787,26 @@ namespace StationeersIC10Editor
             _addBuiltin("Color.Green", black);
 
             foreach (LogicType lt in EnumCollections.LogicTypes.Values)
-                types[Enum.GetName(typeof(LogicType), lt)] = IC10DataType.LogicType;
+                types[Enum.GetName(typeof(LogicType), lt)] = DataType.LogicType;
 
 
             foreach (ColorType col in EnumCollections.ColorTypes.Values)
-                types["Color." + Enum.GetName(typeof(ColorType), col)] = IC10DataType.Number;
+                types["Color." + Enum.GetName(typeof(ColorType), col)] = DataType.Number;
 
             foreach (var batchMode in new string[] { "Average", "Sum", "Min", "Max" })
-                types[batchMode] = IC10DataType.BatchMode;
+                types[batchMode] = DataType.BatchMode;
 
             foreach (var name in registers)
-                types[name] = IC10DataType.Register;
+                types[name] = DataType.Register;
 
             foreach (var name in devices)
-                types[name] = IC10DataType.Device;
+                types[name] = DataType.Device;
 
-            foreach (var instr in instructions.Keys)
-                types[instr] = IC10DataType.Instruction;
+            foreach (var instr in IC10Token.Instructions.Keys)
+                types[instr] = DataType.Instruction;
 
-            types["define"] = IC10DataType.Define;
-            types["alias"] = IC10DataType.Alias;
+            types["define"] = DataType.Define;
+            types["alias"] = DataType.Alias;
 
             Code = new List<IC10Line>();
         }
@@ -900,46 +904,46 @@ namespace StationeersIC10Editor
         {
             L.Info($"UpdateDataType for token: {token}");
             int count = 0;
-            IC10DataType type = IC10DataType.Unknown;
+            DataType type = DataType.Unknown;
 
             if (defines.ContainsKey(token))
             {
                 L.Info($"Token {token} is a define with count {defines[token]}");
                 count += defines[token];
-                type = IC10DataType.Number;
+                type = DataType.Number;
             }
 
             if (devAliases.ContainsKey(token))
             {
                 L.Info($"Token {token} is a device alias with count {devAliases[token]}");
                 count += 1; // multiple aliaes are allowed, thus only count as 1
-                type = IC10DataType.Device;
+                type = DataType.Device;
             }
             if (regAliases.ContainsKey(token))
             {
                 L.Info($"Token {token} is a register alias with count {regAliases[token]}");
                 count += 1; // multiple aliaes are allowed, thus only count as 1
-                type = IC10DataType.Register;
+                type = DataType.Register;
             }
 
             if (labels.ContainsKey(TrimToken(token)))
             {
                 L.Info($"Token {token} is a label with count {labels[token]}");
                 count += labels[token];
-                type = IC10DataType.Label;
+                type = DataType.Label;
             }
 
-            if (instructions.ContainsKey(token))
+            if (IC10Token.Instructions.ContainsKey(token))
             {
                 L.Info($"Token {token} is an instruction");
                 count += 1;
-                type = IC10DataType.Instruction;
+                type = DataType.Instruction;
             }
 
             if (count > 1)
             {
                 L.Warning($"Token {token} has multiple definitions, marking as error");
-                type = IC10DataType.Unknown;
+                type = DataType.Unknown;
             }
 
             if (types.ContainsKey(token) && types[token] != type)
@@ -970,6 +974,7 @@ namespace StationeersIC10Editor
                 L.Warning($"RemoveDictEntry: trying to remove non-existing key {key} from dictionary");
                 return;
             }
+            L.Info($"RemoveDictEntry: removing key {key} from dictionary");
             dict[key]--;
             if (dict[key] == 0)
                 dict.Remove(key);
@@ -1049,20 +1054,6 @@ namespace StationeersIC10Editor
                 return ColorDefault;
         }
 
-        public struct ColoredTextSegment
-        {
-            public uint Color;
-            public string Text;
-            public Vector2 Pos;
-
-            public ColoredTextSegment(string color, string text, Vector2 pos)
-            {
-                Color = ColorFromHTML(color);
-                Text = text;
-                Pos = pos;
-            }
-        }
-
         public static void DrawColoredText(List<ColoredTextSegment> input)
         {
             var pos = ImGui.GetCursorScreenPos();
@@ -1092,13 +1083,15 @@ namespace StationeersIC10Editor
                 if (match.Index > lastIndex)
                 {
                     string rawText = input.Substring(lastIndex, match.Index - lastIndex);
-                    result.Add(new ColoredTextSegment("#ffffff", rawText, pos));
+                    if (!string.IsNullOrEmpty(rawText.Trim()))
+                        result.Add(new ColoredTextSegment("#ffffff", rawText, pos));
                     pos.x += ImGui.CalcTextSize(rawText).x;
                 }
 
                 string color = match.Groups[1].Value;
                 string text = match.Groups[2].Value;
-                result.Add(new ColoredTextSegment(color, text, pos));
+                if (!string.IsNullOrEmpty(text.Trim()))
+                    result.Add(new ColoredTextSegment(color, text, pos));
                 pos.x += ImGui.CalcTextSize(text).x;
 
                 lastIndex = match.Index + match.Length;
@@ -1106,7 +1099,9 @@ namespace StationeersIC10Editor
 
             if (lastIndex < input.Length)
             {
-                result.Add(new ColoredTextSegment("#ffffff", input.Substring(lastIndex), pos));
+                var rawText = input.Substring(lastIndex);
+                if (!string.IsNullOrEmpty(rawText.Trim()))
+                    result.Add(new ColoredTextSegment("#ffffff", rawText, pos));
                 pos.x += ImGui.CalcTextSize(input.Substring(lastIndex)).x;
             }
 
@@ -1152,37 +1147,21 @@ namespace StationeersIC10Editor
             if (tokenAtCaret.IsInstruction)
             {
                 var instruction = tokenAtCaret.Text;
-                ScriptCommand scriptCommand = instructions[instruction];
-                String example = ProgrammableChip.GetCommandExample(scriptCommand);
-                instructionDescription = ProgrammableChip.GetCommandDescription(scriptCommand);
-
-                float w = 0.0f;
-                instructionHeader = ParseColoredText($"Instruction: <color=yellow>{tokenAtCaret.Text}</color>", ref w);
-                width = Math.Max(width, w);
-
-                instructionExample = ParseColoredText($"    {example}", ref w);
-                width = Math.Max(width, w);
-                width = Math.Max(width + 40, 500.0f);
+                var command = IC10Token.Instructions[instruction];
+                width = Math.Max(command.TooltipWidth, width);
             }
-
 
             ImGui.SetNextWindowSize(new Vector2(width, 0));
             ImGui.BeginTooltip();
 
-            if (tokenAtCaret.Tooltip != null)
+            if (string.IsNullOrEmpty(tokenAtCaret.Tooltip) == false)
             {
                 ImGui.TextWrapped(tokenAtCaret.Tooltip);
                 if (tokenAtCaret.IsInstruction)
                     ImGui.Separator();
             }
             if (tokenAtCaret.IsInstruction)
-            {
-                DrawColoredText(instructionHeader);
-                ImGui.NewLine();
-                DrawColoredText(instructionExample);
-                ImGui.NewLine();
-                ImGui.TextWrapped(instructionDescription);
-            }
+                IC10Token.Instructions[tokenAtCaret.Text].DrawTooltip();
             ImGui.EndTooltip();
 
             return false;

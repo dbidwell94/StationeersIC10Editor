@@ -286,6 +286,7 @@ namespace StationeersIC10Editor
             {
                 if (!Editor.DeleteSelectedCode())
                 {
+                    L.Info($"Pushing undo state for input: {input}");
                     Editor.PushUndoState();
                 }
 
@@ -407,13 +408,13 @@ namespace StationeersIC10Editor
                         CaretPos = Move(CaretPos, new MoveAction(MoveToken.WordBeginning, false, 1));
                         break;
                     case 'D':
-                        Editor.PushUndoState();
+                        Editor.PushUndoState(false);
                         CurrentLine = CurrentLine.Substring(0, CaretCol);
                         CaretCol = Math.Max(CaretCol - 1, 0);
                         break;
 
                     case 'C':
-                        Editor.PushUndoState();
+                        Editor.PushUndoState(false);
                         CurrentLine = CurrentLine.Substring(0, CaretCol);
                         Mode = KeyMode.Insert;
                         break;

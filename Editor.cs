@@ -3,17 +3,18 @@ namespace StationeersIC10Editor
     using System;
     using System.Collections.Generic;
     using Assets.Scripts;
-    using Assets.Scripts.Objects.Electrical;
     using Assets.Scripts.Objects.Motherboards;
     using Assets.Scripts.UI;
     using ImGuiNET;
     using UnityEngine;
 
-    public struct EditorState
+
+    public class EditorState
     {
         public string Code;
         public TextPosition CaretPos;
         public double Timestamp;
+        public bool Mergeable;
     }
 
     public enum MoveToken
@@ -277,22 +278,33 @@ namespace StationeersIC10Editor
         public LinkedList<EditorState> RedoList;
         public int ScrollToCaret = 0;
 
-        public void PushUndoState()
+        public void PushUndoState(bool merge = true)
         {
+            while (UndoList.Count > 100)
+                UndoList.RemoveLast();
+
             var state = State;
+            state.Mergeable = merge;
+
+            if (string.IsNullOrEmpty(state.Code))
+                return;
+
             if (UndoList.Count > 0)
             {
-                // merge with previous state if within 500ms or same code
                 var first = UndoList.First.Value;
-                if (state.Timestamp < first.Timestamp + 500 || state.Code == first.Code)
+                if (state.Code == first.Code)
+                {
+                    first.CaretPos = state.CaretPos;
+                    return;
+                }
+
+                // merge with previous state if within 500ms or same code
+                // merging does not happen accross "large" changes (e.g. paste, cut, delete selection etc.)
+                if (merge && first.Mergeable && state.Timestamp < first.Timestamp + 500)
                     UndoList.RemoveFirst();
             }
 
-            UndoList.AddFirst(State);
-            while (UndoList.Count > 100)
-            {
-                UndoList.RemoveLast();
-            }
+            UndoList.AddFirst(state);
         }
 
         public void Undo()
@@ -528,7 +540,7 @@ namespace StationeersIC10Editor
         public void Paste()
         {
             if (!DeleteSelectedCode())
-                PushUndoState();
+                PushUndoState(false);
             Insert(GameManager.Clipboard);
         }
 
@@ -540,7 +552,7 @@ namespace StationeersIC10Editor
         public void ClearCode(bool pushUndo = true)
         {
             if (pushUndo)
-                PushUndoState();
+                PushUndoState(false);
             Lines.Clear();
             Lines.Add(string.Empty);
             CodeFormatter.ResetCode(string.Empty);
@@ -603,12 +615,17 @@ namespace StationeersIC10Editor
 
         public bool DeleteRange(TextRange range)
         {
+            L.Info($"DeleteRange: {range.Start.Line},{range.Start.Col} - {range.End.Line},{range.End.Col}");
             if (!(bool)range)
                 return false;
 
+            L.Info("Valid range");
+
             range = range.Sorted();
 
-            PushUndoState();
+            L.Info($"SortedRange: {range.Start.Line},{range.Start.Col} - {range.End.Line},{range.End.Col}");
+
+            PushUndoState(false);
 
             var start = range.Start;
             var end = range.End;
@@ -635,6 +652,7 @@ namespace StationeersIC10Editor
             }
 
             CaretPos = start;
+            L.Info($"CaretPos after delete: {CaretPos.Line},{CaretPos.Col}");
             return true;
         }
 
@@ -681,7 +699,7 @@ namespace StationeersIC10Editor
             // rounded buttons style
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
 
-            if (ImGui.Button("Library", buttonSize))
+            if (ImGui.Button($"Library", buttonSize))
                 ShowHelpWindow(HelpMode.Instructions);
 
             ImGui.SameLine();
@@ -769,7 +787,6 @@ namespace StationeersIC10Editor
                 ImGui.Text(status);
                 ImGui.SameLine();
             }
-
             ImGui.PopStyleVar();
         }
 
@@ -926,6 +943,8 @@ namespace StationeersIC10Editor
             InputSourceCode.Instance.Window.localPosition = new Vector3(-10000, -10000, 0);
 
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.1f, 0.1f, 0.1f, 1.0f));
+            var io = ImGui.GetIO();
+            ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
 
             if (!IsInitialized)
             {
@@ -933,7 +952,10 @@ namespace StationeersIC10Editor
                 var windowSize = new Vector2(
                     Math.Min(1200, displaySize.x - 100),
                     displaySize.y - 100);
-                var windowPos = 0.5f * (displaySize - windowSize);
+                var _windowPos = 0.5f * (displaySize - windowSize);
+
+                _windowPos.x = Mathf.Round(_windowPos.x);
+                _windowPos.y = Mathf.Round(_windowPos.y);
 
                 ImGui.SetNextWindowSize(windowSize);
                 ImGui.SetNextWindowPos(_windowPos);
@@ -944,19 +966,29 @@ namespace StationeersIC10Editor
             if (_didGameWindowOpen)
             {
                 _windowPos.x = Math.Max(0.5f * ImGui.GetIO().DisplaySize.x + 50.0f, _windowPos.x);
+                _windowPos.x = Mathf.Round(_windowPos.x);
+                _windowPos.y = Mathf.Round(_windowPos.y);
                 ImGui.SetNextWindowPos(_windowPos);
             }
 
-            ImGui.Begin(Title, ImGuiWindowFlags.NoSavedSettings);
+            // if(ImGui.GetTime() % 1.0 < 0.5)
+            //   ImGui.Begin("012345678", ImGuiWindowFlags.NoSavedSettings);
+            // else
+            ImGui.Begin(Title + "###IC10EditorWindow", ImGuiWindowFlags.NoSavedSettings);
+            // ImGui.Begin(Title, ImGuiWindowFlags.NoSavedSettings);
+            // ImGui.SetWindowFontScale(1.0f);
+            DrawHeader();
 
+            ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
             _windowPos = ImGui.GetWindowPos();
 
             HandleInput(_hasFocus);
 
             _hasFocus = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
 
-            DrawHeader();
             DrawCodeArea();
+            ImGui.PopFont();
+
             DrawFooter();
 
 
@@ -975,7 +1007,8 @@ namespace StationeersIC10Editor
             avgRenderTime = (avgRenderTime * 1000000.0);
             maxRenderTime = (maxRenderTime * 1000000.0);
 
-            // ImGui.Text( $"Avg: {avgRenderTime:F0} us, Max: {maxRenderTime:F0} us");
+            ImGui.SameLine();
+            ImGui.Text($"Avg: {avgRenderTime:F0} us, Max: {maxRenderTime:F0} us");
 
             ImGui.SameLine();
             CodeFormatter.DrawStatus();
@@ -983,25 +1016,31 @@ namespace StationeersIC10Editor
             ImGui.End();
             ImGui.PopStyleColor();
 
-
-
-
             if (_hasFocus && IsMouseInsideTextArea())
             {
+                ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
                 if (KeyHandler.IsMouseIdle(.0))
                 {
                     var pos = GetTextPositionFromMouse(false);
+                    ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
                     if (pos)
                         CodeFormatter.DrawTooltip(Lines[CaretLine], pos, _caretPixelPos);
+                    ImGui.PopFont();
                     // _hasFocus = _hasFocus || hasTooltipFocus;
                 }
+                ImGui.PopFont();
             }
 
             DrawHelpWindow();
+
             double seconds = stopwatch.Elapsed.TotalSeconds;
             _renderTimes.Enqueue(seconds);
             while (_renderTimes.Count > 100)
                 _renderTimes.Dequeue();
+
+            ImGui.PopFont();
+
+
         }
 
         public void DrawHelpWindow()
@@ -1050,6 +1089,8 @@ namespace StationeersIC10Editor
             foreach (var line in lines)
                 Lines.Add(line);
             CaretPos = new TextPosition(0, 0);
+            if (pushUndo)
+                PushUndoState(false);
         }
 
 
