@@ -972,10 +972,8 @@ namespace StationeersIC10Editor
             }
             dict[key]--;
             if (dict[key] == 0)
-            {
                 dict.Remove(key);
-            }
-            if (dict[key] < 2)
+            else if (dict[key] < 2)
                 UpdateDataType(key);
         }
 
