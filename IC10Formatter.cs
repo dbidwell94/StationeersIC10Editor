@@ -587,9 +587,9 @@ namespace StationeersIC10Editor
     {
         private void DrawRegistersGrid()
         {
+            // todo: store this information, update only when code changes
             HashSet<string> usedRegisters = new HashSet<string>();
             HashSet<string> freeRegisters = new HashSet<string>(IC10Token.Registers);
-
 
             foreach (var line in Code)
             {
@@ -604,55 +604,29 @@ namespace StationeersIC10Editor
                 }
             }
 
-            // ImGui.Text($"Used Registers: {string.Join(", ", usedRegisters)}\tFree Registers: {string.Join(", ", freeRegisters)}");
-            // Get current draw list
             var drawList = ImGui.GetWindowDrawList();
 
-            // Start position (relative to window)
             Vector2 startPos = ImGui.GetCursorScreenPos();
             Vector2 windowSize = ImGui.GetWindowSize();
 
-
-            // Rectangle size and spacing
             Vector2 rectSize = new Vector2(9, 9);
             float spacing = 4.0f;
 
-            // startPos.x += windowSize.x - 20*rectSize.x - 19*spacing - 50.0f;
             startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * 85.0f - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
             startPos.y += 8.0f;
 
-            // Colors
             uint colorUsed = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
             uint colorFree = ImGui.GetColorU32(new Vector4(0.0f, 1.0f, 0.0f, 1.0f));
 
-            // Draw 16 rectangles in 2 rows of 8
+            float x0 = startPos.x;
+
             for (int i = 0; i < 16; i++)
             {
-                var reg = $"r{i}";
-
-                uint colorFill = freeRegisters.Contains(reg) ? colorFree : colorUsed;
-
-                int col = i + i / 4;
-                int row = 0;
-
-                // int row = i / 8;
-                // int col = i % 8;
-
-                // if(col > 3)
-                // col++;
-
-                Vector2 pos = new Vector2(
-                    startPos.x + col * (rectSize.x + spacing),
-                    startPos.y + row * (rectSize.y + spacing)
-                );
-
-                Vector2 posEnd = pos + rectSize;
-
-                drawList.AddRectFilled(pos, posEnd, colorFill);
-
+                uint color = freeRegisters.Contains($"r{i}") ? colorFree : colorUsed;
+                int xShift = i + i / 4; // add extra space every 4 registers
+                startPos.x = x0 + xShift * (rectSize.x + spacing);
+                drawList.AddRectFilled(startPos, startPos + rectSize, color);
             }
-
-            // ImGui.Dummy(new Vector2(8 * (rectSize.x + spacing), 2 * (rectSize.y + spacing)));
         }
 
         public override void DrawStatus()
@@ -664,8 +638,6 @@ namespace StationeersIC10Editor
         public override void DrawLine(int lineIndex, string line, TextRange selection = default)
         {
             float charWidth = ImGui.CalcTextSize("M").x;
-            // var codeComment = line.Split('#');
-            // string code = codeComment[0];
             if (lineIndex < 0 || lineIndex >= Code.Count)
                 return;
             var tokens = Code[lineIndex];
@@ -705,28 +677,8 @@ namespace StationeersIC10Editor
             {
                 var tokenPos = new Vector2(pos.x + charWidth * token.Column, pos.y);
                 ImGui.GetWindowDrawList().AddText(tokenPos, token.Color, token.Text);
-                // if (!string.IsNullOrWhiteSpace(token))
-                // {
-                //     uint bgColor = GetBackground(token);
-                //     if (bgColor != 0)
-                //     {
-                //         Vector2 bgStart = new Vector2(pos.x, pos.y);
-                //         Vector2 bgEnd = new Vector2(
-                //             pos.x + (charWidth * token.Length),
-                //             pos.y + ImGui.GetTextLineHeightWithSpacing());
-                //         ImGui.GetWindowDrawList().AddRectFilled(bgStart, bgEnd, bgColor);
-                //     }
-                //     ImGui.GetWindowDrawList().AddText(pos, GetColor(token), token);
-                // }
-                //
-                // pos.x += charWidth * token.Length;
             }
 
-            // if (codeComment.Length > 1)
-            // {
-            //     string token = "#" + string.Join("#", codeComment, 1, codeComment.Length - 1);
-            //     ImGui.GetWindowDrawList().AddText(pos, ColorComment, token);
-            // }
         }
 
         public static uint GetColor(IC10Token token)
@@ -937,12 +889,6 @@ namespace StationeersIC10Editor
             errors.Clear();
             Code.Clear();
 
-            // if (string.IsNullOrEmpty(code))
-            // {
-            //     L.Info("ResetCode: empty code");
-            //     return;
-            // }
-            //
             var lines = code.Split('\n');
             L.Info($"ResetCode: {lines.Length} lines");
             foreach (var line in lines)
@@ -1166,15 +1112,6 @@ namespace StationeersIC10Editor
                 pos.x += ImGui.CalcTextSize(input.Substring(lastIndex)).x;
             }
 
-            // foreach (var segment in result)
-            // {
-            //     ImGui.GetWindowDrawList().AddText(
-            //         pos,
-            //         segment.Color,
-            //         segment.Text);
-            //     pos.x += ImGui.CalcTextSize(segment.Text).x;
-            // }
-
             width = pos.x;
 
             return result;
@@ -1231,10 +1168,9 @@ namespace StationeersIC10Editor
             }
 
 
-            // ImGui.SetNextWindowSizeConstraints(new Vector2(500, 0), new Vector2(float.MaxValue, float.MaxValue));
             ImGui.SetNextWindowSize(new Vector2(width, 0));
             ImGui.BeginTooltip();
-            // ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35);
+
             if (tokenAtCaret.Tooltip != null)
             {
                 ImGui.TextWrapped(tokenAtCaret.Tooltip);
@@ -1243,73 +1179,15 @@ namespace StationeersIC10Editor
             }
             if (tokenAtCaret.IsInstruction)
             {
-                // ImGui.SameLine();
                 DrawColoredText(instructionHeader);
                 ImGui.NewLine();
                 DrawColoredText(instructionExample);
-                // var insturctions = ParseAndDrawColoredText($"Instruction: <color=yellow>{instruction}</color>");
-                // ImGui.Separator();
-                // ParseAndDrawColoredText($"    {example}");
                 ImGui.NewLine();
-                // ImGui.Text("Description: ");
                 ImGui.TextWrapped(instructionDescription);
             }
             ImGui.EndTooltip();
 
             return false;
-
-
-            // bool hasFocus = false;
-            // var col = caret.Col;
-            // if (col == 0)
-            //     return hasFocus;
-            // var charBefore = line[col - 1];
-            // var tokensBefore = ICodeFormatter.Tokenize(line.Substring(0, col), true);
-            // if (charBefore == ' ' && tokensBefore.Count > 0)
-            // {
-            //     var instruction = tokensBefore[0];
-            //     while (string.IsNullOrWhiteSpace(instruction) && tokensBefore.Count > 1)
-            //     {
-            //         tokensBefore.RemoveAt(0);
-            //         instruction = tokensBefore[0];
-            //     }
-            //     if (instructions.ContainsKey(instruction))
-            //     {
-            //         pos += new Vector2(30, 40);
-            //
-            //         ImGui.SetNextWindowSize(new Vector2(500, 0), ImGuiCond.Once);
-            //         var displaySize = ImGui.GetIO().DisplaySize;
-            //         pos.x = Math.Min(pos.x, displaySize.x - 510);
-            //         ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
-            //
-            //         if (ImGui.Begin("##IC10EditorTooltip",
-            //             ImGuiWindowFlags.NoNav
-            //             // | ImGuiWindowFlags.NoFocusOnAppearing
-            //             | ImGuiWindowFlags.NoTitleBar
-            //             | ImGuiWindowFlags.NoScrollbar
-            //             | ImGuiWindowFlags.NoSavedSettings
-            //             | ImGuiWindowFlags.NoMove
-            //             | ImGuiWindowFlags.NoCollapse
-            //             | ImGuiWindowFlags.NoResize
-            //             ))
-            //         {
-            //             hasFocus = ImGui.IsWindowFocused();
-            //
-            //             ScriptCommand scriptCommand = instructions[instruction];
-            //             String example = ProgrammableChip.GetCommandExample(scriptCommand);
-            //             String description = ProgrammableChip.GetCommandDescription(scriptCommand);
-            //
-            //             ParseAndDrawColoredText($"Instruction: <color=yellow>{instruction}</color>");
-            //             ImGui.Separator();
-            //             ParseAndDrawColoredText($"    {example}");
-            //             ImGui.NewLine();
-            //             // ImGui.Text("Description: ");
-            //             ImGui.TextWrapped(description);
-            //             ImGui.End();
-            //         }
-            //     }
-            // }
-            // return hasFocus;
         }
     }
 }
