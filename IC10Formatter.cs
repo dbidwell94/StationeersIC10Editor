@@ -3,16 +3,11 @@ namespace StationeersIC10Editor
     using System;
     using System.Text.RegularExpressions;
     using System.Collections.Generic;
-    using Assets.Scripts;
-    using Assets.Scripts.Objects.Electrical;
-    using Assets.Scripts.Objects.Motherboards;
     using ImGuiNET;
     using UnityEngine;
 
     namespace IC10
     {
-
-
         public class IC10CodeFormatter : ICodeFormatter
         {
             private void DrawRegistersGrid()
@@ -168,7 +163,6 @@ namespace StationeersIC10Editor
 
             public static uint ColorInstruction = ColorFromHTML("#ffff00");
 
-            // todo: recognize data type of tokens
             public static uint ColorDevice = ColorFromHTML("#00ff00");
             public static uint ColorLogicType = ColorFromHTML("#ff8000");
             public static uint ColorRegister = ColorFromHTML("#0080ff");
@@ -177,95 +171,17 @@ namespace StationeersIC10Editor
             public static uint ColorAlias = ColorFromHTML("#4d4dcc");
             public static uint ColorLabel = ColorFromHTML("#800080");
 
-            private HashSet<string> errors = new HashSet<string>(); // tokens that are marked as errors (used as alias and define for instance)
-
             private Dictionary<string, DataType> types = new Dictionary<string, DataType>();
 
             private Dictionary<string, int> defines = new Dictionary<string, int>();
             private Dictionary<string, int> regAliases = new Dictionary<string, int>();
             private Dictionary<string, int> devAliases = new Dictionary<string, int>();
             private Dictionary<string, int> labels = new Dictionary<string, int>();
-            // private Dictionary<string, ScriptCommand> instructions = new Dictionary<string, ScriptCommand>();
-            // private HashSet<string> logicTypes = new HashSet<string>();
-            // private HashSet<string> registers = new HashSet<string>();
-            // private HashSet<string> devices = new HashSet<string>();
-
-            // private Dictionary<string, uint> builtins = new Dictionary<string, uint>();
 
             private List<IC10Line> Code = new List<IC10Line>();
 
-            // private void _addBuiltin(string name, uint color, HashSet<string> hashSet = null)
-            // {
-            //     if (hashSet != null)
-            //         hashSet.Add(name);
-            //     builtins[name] = color;
-            // }
-
             public IC10CodeFormatter()
             {
-                L.Info("IC10CodeFormatter - Constructor");
-                // foreach (ScriptCommand cmd in EnumCollections.ScriptCommands.Values)
-                // {
-                //     string cmdName = Enum.GetName(typeof(ScriptCommand), cmd);
-                //     instructions[cmdName] = cmd;
-                //     builtins[cmdName] = ColorInstruction;
-                // }
-
-                // foreach (LogicType lt in EnumCollections.LogicTypes.Values)
-                //     _addBuiltin(Enum.GetName(typeof(LogicType), lt), ColorLogicType, logicTypes);
-                //
-                // foreach (var batchMode in new string[] { "Average", "Sum", "Min", "Max" })
-                //     _addBuiltin(batchMode, ColorLogicType, logicTypes);
-                //
-                // for (int i = 0; i < 16; i++)
-                // {
-                //     _addBuiltin($"r{i}", ColorRegister, registers);
-                //     _addBuiltin($"rr{i}", ColorRegister, registers);
-                //     _addBuiltin($"rrr{i}", ColorRegister, registers);
-                //     _addBuiltin($"rrrr{i}", ColorRegister, registers);
-                // }
-                //
-                // _addBuiltin($"sp", ColorRegister, registers);
-                // _addBuiltin($"ra", ColorRegister, registers);
-                //
-                // for (int i = 0; i < 6; i++)
-                //     _addBuiltin($"d{i}", ColorDevice, devices);
-                //
-                // _addBuiltin($"db", ColorDevice, devices);
-                //
-                // foreach (var constant in ProgrammableChip.AllConstants)
-                //     _addBuiltin(constant.Literal, ColorNumber);
-                //
-                //
-                // // make sure the tokens are still readable with the background color
-                // var black = ColorFromHTML("black");
-                // _addBuiltin("Color.White", black);
-                // _addBuiltin("Color.Yellow", black);
-                // _addBuiltin("Color.Pink", black);
-                // _addBuiltin("Color.Green", black);
-                //
-                // foreach (LogicType lt in EnumCollections.LogicTypes.Values)
-                //     types[Enum.GetName(typeof(LogicType), lt)] = DataType.LogicType;
-                //
-                //
-                // foreach (ColorType col in EnumCollections.ColorTypes.Values)
-                //     types["Color." + Enum.GetName(typeof(ColorType), col)] = DataType.Color;
-                //
-                // foreach (var batchMode in new string[] { "Average", "Sum", "Min", "Max" })
-                //     types[batchMode] = DataType.BatchMode;
-                //
-                // foreach (var name in registers)
-                //     types[name] = DataType.Register;
-                //
-                // foreach (var name in devices)
-                //     types[name] = DataType.Device;
-                //
-                // foreach (var instr in IC10Utils.Instructions.Keys)
-                //     types[instr] = DataType.Instruction;
-                //
-                // types["define"] = DataType.Define;
-                // types["alias"] = DataType.Alias;
-
                 Code = new List<IC10Line>();
             }
 
@@ -348,7 +264,6 @@ namespace StationeersIC10Editor
                 regAliases.Clear();
                 devAliases.Clear();
                 labels.Clear();
-                errors.Clear();
                 Code.Clear();
 
                 var lines = code.Split('\n');
@@ -360,40 +275,40 @@ namespace StationeersIC10Editor
 
             public void UpdateDataType(string token)
             {
-                L.Info($"UpdateDataType for token: {token}");
+                L.Debug($"UpdateDataType for token: {token}");
                 int count = 0;
                 DataType type = DataType.Unknown;
 
                 if (defines.ContainsKey(token))
                 {
-                    L.Info($"Token {token} is a define with count {defines[token]}");
+                    L.Debug($"Token {token} is a define with count {defines[token]}");
                     count += defines[token];
                     type = DataType.Number;
                 }
 
                 if (devAliases.ContainsKey(token))
                 {
-                    L.Info($"Token {token} is a device alias with count {devAliases[token]}");
+                    L.Debug($"Token {token} is a device alias with count {devAliases[token]}");
                     count += 1; // multiple aliaes are allowed, thus only count as 1
                     type = DataType.Device;
                 }
                 if (regAliases.ContainsKey(token))
                 {
-                    L.Info($"Token {token} is a register alias with count {regAliases[token]}");
+                    L.Debug($"Token {token} is a register alias with count {regAliases[token]}");
                     count += 1; // multiple aliaes are allowed, thus only count as 1
                     type = DataType.Register;
                 }
 
                 if (labels.ContainsKey(TrimToken(token)))
                 {
-                    L.Info($"Token {token} is a label with count {labels[token]}");
+                    L.Debug($"Token {token} is a label with count {labels[token]}");
                     count += labels[token];
                     type = DataType.Label;
                 }
 
                 if (IC10Utils.Instructions.ContainsKey(token))
                 {
-                    L.Info($"Token {token} is an instruction");
+                    L.Debug($"Token {token} is an instruction");
                     count += 1;
                     type = DataType.Instruction;
                 }
@@ -414,35 +329,9 @@ namespace StationeersIC10Editor
                     line.SetTypes(types);
             }
 
-            // private void AddName(IC10Line line)
-            // {
-            //
-            //     if (line.IsLabel)
-            //     {
-            //         var name = TrimToken(line[0].Text);
-            //         types[name] = DataType.Label;
-            //         AddDictEntry(labels, name);
-            //         return;
-            //     }
-            //     if (line.IsNumAlias)
-            //     {
-            //         var name = line[1].Text;
-            //         types[name] = DataType.Alias;
-            //         AddDictEntry(regAliases, name);
-            //         return;
-            //     }
-            //     if (line.IsDevAlias)
-            //     {
-            //         var name = line[1].Text;
-            //         types[name] = DataType.Alias;
-            //         AddDictEntry(devAliases, name);
-            //         return;
-            //     }
-            // }
-            //
             private void AddDictEntry(Dictionary<string, int> dict, string key, DataType type)
             {
-                L.Info($"AddDictEntry: adding key {key} to dictionary");
+                L.Debug($"AddDictEntry: adding key {key} to dictionary");
                 if (!dict.ContainsKey(key))
                     dict[key] = 0;
 
@@ -459,7 +348,7 @@ namespace StationeersIC10Editor
                     L.Warning($"RemoveDictEntry: trying to remove non-existing key {key} from dictionary");
                     return;
                 }
-                L.Info($"RemoveDictEntry: removing key {key} from dictionary");
+                L.Debug($"RemoveDictEntry: removing key {key} from dictionary");
                 dict[key]--;
                 if (dict[key] == 0)
                 {
@@ -477,7 +366,7 @@ namespace StationeersIC10Editor
 
             public override void InsertLine(int index, string line)
             {
-                L.Info($"Formatter: insert line at index {index}/{Code.Count}, text: '{line}'");
+                L.Debug($"Formatter: insert line at index {index}/{Code.Count}, text: '{line}'");
                 var ic10line = ParseIC10Line(line);
 
                 Code.Insert(index, ic10line);
@@ -494,7 +383,7 @@ namespace StationeersIC10Editor
 
             public override void RemoveLine(int index)
             {
-                L.Info($"Formatter: removing line at index {index}/{Code.Count}");
+                L.Debug($"Formatter: removing line at index {index}/{Code.Count}");
                 var line = Code[index];
                 Code.RemoveAt(index);
 

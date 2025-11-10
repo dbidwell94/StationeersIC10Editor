@@ -1,11 +1,9 @@
 namespace StationeersIC10Editor
 {
-    using UnityEngine;
     using System;
     using BepInEx;
     using BepInEx.Configuration;
     using HarmonyLib;
-    using System.Collections;
 
     class L
     {
@@ -14,6 +12,11 @@ namespace StationeersIC10Editor
         public static void SetLogger(BepInEx.Logging.ManualLogSource logger)
         {
             _logger = logger;
+        }
+
+        public static void Debug(string message)
+        {
+            _logger?.LogDebug(message);
         }
 
         public static void Info(string message)
