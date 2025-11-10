@@ -10,11 +10,12 @@ namespace StationeersIC10Editor
     public enum KeyMode
     {
         Insert,
-        Normal
+        VimNormal
     }
 
     public class KeyHandler
     {
+        public Action<string> OnKeyPressed = delegate { };
         public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
 
         IC10Editor Editor;
@@ -64,6 +65,17 @@ namespace StationeersIC10Editor
             return (ImGui.GetTime() - _timeLastMouseMove) >= idleTime;
         }
 
+
+        public void DrawStatus()
+        {
+            if (VimEnabled)
+            {
+                String status = $"Mode: {Mode}";
+                ImGui.Text(status);
+                ImGui.SameLine();
+            }
+        }
+
         public void HandleMouse(bool ctrlDown, bool shiftDown)
         {
             var mousePos = ImGui.GetMousePos();
@@ -79,6 +91,7 @@ namespace StationeersIC10Editor
                 {
                     if (ImGui.IsMouseReleased(0))
                     {
+                        OnKeyPressed("Ctrl+Click");
                         // open stationpedia page for word under mouse
                         var name = Editor.GetCode(Editor.GetWordAt(Editor.GetTextPositionFromMouse()));
 
@@ -100,6 +113,7 @@ namespace StationeersIC10Editor
                 {
                     if (ImGui.IsMouseDoubleClicked(0))
                     {
+                        OnKeyPressed("DoubleClick");
                         _isSelecting = false;
                         var clickPos = Editor.GetTextPositionFromMouse();
                         var range = Editor.GetWordAt(clickPos);
@@ -110,6 +124,7 @@ namespace StationeersIC10Editor
                     }
                     else if (ImGui.IsMouseClicked(0)) // Left click
                     {
+                        OnKeyPressed("Click");
                         _isSelecting = true;
                         var clickPos = Editor.GetTextPositionFromMouse();
                         CaretPos = clickPos;
@@ -141,17 +156,35 @@ namespace StationeersIC10Editor
             if (ctrlDown)
             {
                 if (ImGui.IsKeyPressed(ImGuiKey.V))
+                {
                     Editor.Paste();
+                    OnKeyPressed("Ctrl+V - Paste");
+                }
                 if (ImGui.IsKeyPressed(ImGuiKey.A))
+                {
                     Editor.SelectAll();
+                    OnKeyPressed("Ctrl+A - Select All");
+                }
                 if (ImGui.IsKeyPressed(ImGuiKey.C))
+                {
                     Editor.Copy();
+                    OnKeyPressed("Ctrl+C - Copy");
+                }
                 if (ImGui.IsKeyPressed(ImGuiKey.X))
+                {
                     Editor.Cut();
+                    OnKeyPressed("Ctrl+X - Cut");
+                }
                 if (ImGui.IsKeyPressed(ImGuiKey.Z))
+                {
                     Editor.Undo();
+                    OnKeyPressed("Ctrl+Z - Undo");
+                }
                 if (ImGui.IsKeyPressed(ImGuiKey.Y))
+                {
                     Editor.Redo();
+                    OnKeyPressed("Ctrl+Y - Redo");
+                }
 
                 // for (int i = 0; i < io.InputQueueCharacters.Size; i++)
                 // {
@@ -169,6 +202,7 @@ namespace StationeersIC10Editor
                     if (timeNow < _timeLastEscape + 1.0)
                         Editor.HideWindow();
                     _timeLastEscape = timeNow;
+                    OnKeyPressed("Escape");
                 }
             }
 
@@ -198,12 +232,16 @@ namespace StationeersIC10Editor
             {
                 if (shiftDown)
                 {
+                    OnKeyPressed("Shift+Movement - Selecting");
                     if (!(bool)Editor.Selection.Start)
                         Editor.Selection.Start = CaretPos;
                     Editor.Selection.End = newPos;
                 }
                 else
+                {
+                    OnKeyPressed("Movement");
                     Editor.Selection.Reset();
+                }
 
                 CaretPos = newPos;
             }
@@ -218,7 +256,8 @@ namespace StationeersIC10Editor
 
             if (VimEnabled && ImGui.IsKeyPressed(ImGuiKey.Escape))
             {
-                Mode = KeyMode.Normal;
+                OnKeyPressed("Escape - to Normal mode");
+                Mode = KeyMode.VimNormal;
                 if (CaretCol > 0)
                     CaretCol--;
                 return;
@@ -226,6 +265,7 @@ namespace StationeersIC10Editor
 
             if (ImGui.IsKeyPressed(ImGuiKey.Backspace))
             {
+                OnKeyPressed("Backspace");
                 if (Editor.DeleteSelectedCode())
                     return;
 
@@ -249,6 +289,7 @@ namespace StationeersIC10Editor
 
             if (ImGui.IsKeyPressed(ImGuiKey.Delete))
             {
+                OnKeyPressed("Del");
                 if (Editor.DeleteSelectedCode())
                     return;
 
@@ -266,6 +307,7 @@ namespace StationeersIC10Editor
 
             if (ImGui.IsKeyPressed(ImGuiKey.Enter))
             {
+                OnKeyPressed("Enter");
                 Editor.PushUndoState();
                 string newLine = CurrentLine.Substring(CaretCol);
                 CurrentLine = CurrentLine.Substring(0, CaretCol);
@@ -284,6 +326,7 @@ namespace StationeersIC10Editor
 
             if (input.Length > 0)
             {
+                OnKeyPressed($"{input}");
                 if (!Editor.DeleteSelectedCode())
                 {
                     L.Info($"Pushing undo state for input: {input}");
@@ -295,43 +338,43 @@ namespace StationeersIC10Editor
             }
         }
 
-        public void HandleNormalMode(bool ctrlDown, bool shiftDown)
+        public void HandleVimNormalMode(bool ctrlDown, bool shiftDown)
         {
             var io = ImGui.GetIO();
 
             if (ImGui.IsKeyPressed(ImGuiKey.U))
             {
-                L.Info("Handle key in normal mode: U (undo)");
+                OnKeyPressed("U - Undo");
             }
 
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             {
                 // these combos are not captured by ImGui for some reason, so handle them via Unity Input
                 if (Input.GetKeyDown(KeyCode.U))
+                {
+                    OnKeyPressed("Ctrl+U - Move up 20 lines");
                     CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 20));
+                }
                 if (Input.GetKeyDown(KeyCode.D))
+                {
+                    OnKeyPressed("Ctrl+D - Move down 20 lines");
                     CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 20));
+                }
                 if (Input.GetKeyDown(KeyCode.R))
+                {
+                    OnKeyPressed("Ctrl+R - Redo");
                     Editor.Redo();
+                }
             }
 
             for (int i = 0; i < io.InputQueueCharacters.Size; i++)
             {
                 char c = (char)io.InputQueueCharacters[i];
 
-                L.Info($"Handle key in normal mode: {c} (ctrl: {ctrlDown}, shift: {shiftDown})");
-
                 if (ctrlDown)
-                {
-                    if (c == 'u')
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 20));
-                    if (c == 'd')
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 20));
-                    if (c == 'r')
-                        Editor.Redo();
-                    continue;
-                }
+                    break;
 
+                OnKeyPressed($"{c}");
 
                 switch (c)
                 {
@@ -350,14 +393,16 @@ namespace StationeersIC10Editor
                         break;
                     case 'O':
                         Editor.PushUndoState();
-                        Editor.Lines.Insert(CaretLine, "");
                         CaretPos = new TextPosition(CaretLine, 0);
+                        Editor.Insert("\n");
+                        CaretPos = new TextPosition(CaretLine - 1, 0);
                         Mode = KeyMode.Insert;
                         break;
                     case 'o':
                         Editor.PushUndoState();
-                        Editor.Lines.Insert(CaretLine + 1, "");
                         CaretPos = new TextPosition(CaretLine + 1, 0);
+                        Editor.Insert("\n");
+                        CaretPos = new TextPosition(CaretLine - 1, 0);
                         Mode = KeyMode.Insert;
                         break;
                     case 'J':
@@ -424,8 +469,6 @@ namespace StationeersIC10Editor
 
                     default:
                         break;
-
-
                 }
             }
         }
@@ -446,8 +489,8 @@ namespace StationeersIC10Editor
 
             if (Mode == KeyMode.Insert)
                 HandleInsertMode(ctrlDown, shiftDown);
-            else
-                HandleNormalMode(ctrlDown, shiftDown);
+            if (Mode == KeyMode.VimNormal)
+                HandleVimNormalMode(ctrlDown, shiftDown);
         }
     }
 }

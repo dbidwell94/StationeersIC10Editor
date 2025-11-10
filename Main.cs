@@ -41,15 +41,21 @@ namespace StationeersIC10Editor
         public const string PluginVersion = VersionInfo.Version;
         private Harmony _harmony;
 
+        public static ConfigEntry<bool> PauseOnOpen;
         public static ConfigEntry<bool> VimBindings;
         public static ConfigEntry<bool> EnforceLineLimit;
-        public static ConfigEntry<bool> EnforceBytesLimit;
+        public static ConfigEntry<bool> EnforceByteLimit;
+        public static ConfigEntry<float> ScaleFactor;
+        public static ConfigEntry<float> TooltipDelay;
 
         private void BindAllConfigs()
         {
             VimBindings = Config.Bind("General", "Enable VIM bindings (experimental!)", false, "Enable VIM bindings, this is an experimental feature");
             EnforceLineLimit = Config.Bind("General", "Enforce 128 line limit", true, "Enforce the 128 line limit of IC10 programs");
-            EnforceBytesLimit = Config.Bind("General", "Enforce 4KB size limit", true, "Enforce the 4KB byte size of IC10 programs");
+            EnforceByteLimit = Config.Bind("General", "Enforce 4KB size limit", true, "Enforce the 4KB byte size of IC10 programs");
+            PauseOnOpen = Config.Bind("General", "Pause game when IC10 editor is open", true, "Pause the game when the IC10 editor window is open");
+            ScaleFactor = Config.Bind("General", "UI Scale Factor", 1.0f, "Scale factor for the IC10 editor UI");
+            TooltipDelay = Config.Bind("General", "Tooltip Delay", 100f, "Delay in seconds before tooltips are shown");
         }
 
         private void Awake()
