@@ -14,7 +14,7 @@ namespace StationeersIC10Editor
         using Assets.Scripts.Objects.Motherboards;
         using ImGuiNET;
 
-        public enum DataType
+        public enum DataType : uint
         {
             Unknown = 0x00,
             Register = 0x01,
@@ -37,11 +37,12 @@ namespace StationeersIC10Editor
         {
             private static HashSet<string> _registers = new HashSet<string>();
             private static HashSet<string> _logicTypes = new HashSet<string>();
+            private static HashSet<string> _logicSlotTypes = new HashSet<string>();
             private static HashSet<string> _devices = new HashSet<string>();
             private static HashSet<string> _constants = new HashSet<string>();
             private static HashSet<string> _batchModes = new HashSet<string>();
             private static Dictionary<string, IC10OpCode> _instructions = new Dictionary<string, IC10OpCode>();
-            private static Dictionary<string, DataType> _types = new Dictionary<string, DataType>();
+            private static Dictionary<string, ArgType> _types = new Dictionary<string, ArgType>();
 
             public static Dictionary<string, uint> Colors = new Dictionary<string, uint>
         {
@@ -65,33 +66,48 @@ namespace StationeersIC10Editor
                 return Types.ContainsKey(name);
             }
 
-            public static DataType GetType(string name)
+            public static ArgType GetType(string name)
             {
-                if (Types.TryGetValue(name, out DataType type))
+                if (Types.TryGetValue(name, out ArgType type))
                     return type;
                 return DataType.Unknown;
             }
 
-            public static Dictionary<string, DataType> Types
+            private static void _addType(string name, DataType type)
+            {
+                if (!_types.ContainsKey(name))
+                    _types[name] = type;
+                else
+                {
+                    var t = _types[name];
+                    t.Add(type);
+                    _types[name] = t;
+                    L.Info($"Type collision for '{name}', now has types: {_types[name].Description}");
+                }
+            }
+
+            public static Dictionary<string, ArgType> Types
             {
                 get
                 {
                     if (_types.Count == 0)
                     {
                         foreach (var reg in Registers)
-                            _types[reg] = DataType.Register;
+                            _addType(reg, DataType.Register);
                         foreach (var dev in Devices)
-                            _types[dev] = DataType.Device;
+                            _addType(dev, DataType.Device);
                         foreach (var lt in LogicTypes)
-                            _types[lt] = DataType.LogicType;
+                            _addType(lt, DataType.LogicType);
+                        foreach (var lt in LogicSlotTypes)
+                            _addType(lt, DataType.LogicSlotType);
                         foreach (var constant in Constants)
-                            _types[constant] = DataType.Number;
+                            _addType(constant, DataType.Number);
                         foreach (var bm in BatchModes)
-                            _types[bm] = DataType.BatchMode;
+                            _addType(bm, DataType.BatchMode);
                         foreach (var instr in Instructions.Keys)
-                            _types[instr] = DataType.Instruction;
+                            _addType(instr, DataType.Instruction);
                         foreach (var color in Colors.Keys)
-                            _types[color] = DataType.Color;
+                            _addType(color, DataType.Color);
 
 
                         _types["define"] = DataType.Define;
@@ -162,6 +178,17 @@ namespace StationeersIC10Editor
                         foreach (LogicType lt in EnumCollections.LogicTypes.Values)
                             _logicTypes.Add(Enum.GetName(typeof(LogicType), lt));
                     return _logicTypes;
+                }
+            }
+
+            public static HashSet<string> LogicSlotTypes
+            {
+                get
+                {
+                    if (_logicSlotTypes.Count == 0)
+                        foreach (LogicSlotType lt in EnumCollections.LogicSlotTypes.Values)
+                            _logicSlotTypes.Add(Enum.GetName(typeof(LogicSlotType), lt));
+                    return _logicSlotTypes;
                 }
             }
 
@@ -247,16 +274,39 @@ namespace StationeersIC10Editor
             public ArgType()
             { }
 
+            public static implicit operator ArgType(DataType b)
+            {
+                ArgType at = new ArgType();
+                at.Value = (uint)b;
+                return at;
+            }
+
             public bool Has(DataType b)
             {
                 return (Value & (uint)b) != 0;
             }
+
+            public bool Has(ArgType b)
+            {
+                return (Value & b.Value) != 0;
+            }
+
 
             public void Add(DataType b, DataType b2 = 0, DataType b3 = 0)
             {
                 Value |= (uint)b;
                 Value |= (uint)b2;
                 Value |= (uint)b3;
+            }
+
+            public DataType ToDataType()
+            {
+              foreach (DataType dt in Enum.GetValues(typeof(DataType)))
+              {
+                  if ((Value & (uint)dt) != 0)
+                      return dt;
+              }
+              return DataType.Unknown;
             }
 
             public string Description
@@ -373,6 +423,7 @@ namespace StationeersIC10Editor
                                 break;
                             case "str":
                                 argType.Add(DataType.Identifier, DataType.Number, DataType.Label);
+                                argType.Add(DataType.Device);
                                 break;
                             default:
                                 L.Warning($"Unknown argument token '{trimmed}' in opcode {name}");
@@ -463,7 +514,7 @@ namespace StationeersIC10Editor
                     token.Tooltip = String.Empty;
 
                     if (IC10Utils.IsBuiltin(token.Text))
-                        token.DataType = IC10Utils.Types[token.Text];
+                        token.DataType = IC10Utils.Types[token.Text].ToDataType();
                     else if (token.IsLabel)
                         token.DataType = DataType.Number;
                     else if (token.IsComment)
@@ -510,12 +561,19 @@ namespace StationeersIC10Editor
                     for (int i = 0; i < Math.Min(arguments.Count, NumCodeTokens - 1); i++)
                     {
                         var expectedType = arguments[i];
-                        var actualType = this[i + 1].DataType;
+                        var name = this[i + 1].Text;
+                        ArgType actualType = IC10Utils.GetType(name);
+                        actualType.Add(this[i + 1].DataType);
                         if (!expectedType.Has(actualType))
                         {
+                            // if(IC10Utils.IsBuiltin(this[i+1].Text) && expectedType.Has(DataType.LogicSlotType) && IC10Utils.GetType(this[i+1].Text).Has(DataType.LogicSlotType))
+                            // {
+                            //     // Some names are both LogicType and LogicSlotType, allow that
+                            //     continue;
+                            // }
                             this[i + 1].Color = ICodeFormatter.ColorError;
                             string expectedTypeStr = arguments[i].Description;
-                            this[i + 1].Tooltip += $"Error: invalid argument type {actualType}, expected {expectedTypeStr}";
+                            this[i + 1].Tooltip += $"Error: invalid argument type {actualType.Description}, expected {expectedTypeStr}";
                         }
                     }
                 }

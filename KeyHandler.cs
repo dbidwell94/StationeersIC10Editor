@@ -13,6 +13,304 @@ namespace StationeersIC10Editor
         VimNormal
     }
 
+    public struct VimCommand
+    {
+        public string Command;
+        public char Movement;
+        public string Argument;
+        private uint _count;
+
+        public uint Count
+        {
+            get => _count == 0 ? 1 : _count;
+            set => _count = value;
+        }
+
+        public VimCommand()
+        {
+            Command = "";
+            Count = 0;
+            Movement = '\0';
+            Argument = "";
+        }
+
+        public void AddChar(char c)
+        {
+            if (Command == "r" || Command == "f")
+                Argument += c.ToString();
+            else if (char.IsDigit(c) && (_count > 0 || c != '0'))
+                Count = _count * 10 + (uint)(c - '0');
+            else if (_movements.Contains($"{c}"))
+                Movement = c;
+            else
+                Command += c;
+
+            if (!IsValid)
+                Reset();
+        }
+
+        public void Reset()
+        {
+            Command = "";
+            Count = 0;
+            Movement = '\0';
+            Argument = "";
+        }
+
+        public override string ToString()
+        {
+            var sCount = _count > 0 ? Count.ToString() : "";
+            var sMovement = Movement != '\0' ? Movement.ToString() : "";
+            return $"{Command}{sCount}{sMovement}{Argument}";
+        }
+
+        private const string _movements = "hjklwb0$G";
+        private const string _immediateSingleCharCommands = "aiuCDxIAOoJpP" + _movements;
+        private const string _singleCharCommands = "cdfrxy";
+        private const string _twoCharCommands = "dd yy cc gg ";
+
+        private const string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "g";
+
+        public bool IsValid
+        {
+            get
+            {
+                if (Command.Length > 2)
+                    return false;
+
+                if (Command.Length == 1)
+                    return _validFirstChars.Contains(Command);
+
+                return _twoCharCommands.Contains(Command + " ");
+            }
+        }
+
+        public bool IsComplete
+        {
+            get
+            {
+                if (Movement != '\0')
+                    return true;
+
+                if (Command.Length == 1)
+                    if (_immediateSingleCharCommands.Contains(Command))
+                        return true;
+                    else
+                        return (Command == "f" || Command == "r") && Argument.Length == 1;
+
+                if (Command.Length == 2)
+                    return _twoCharCommands.Contains(Command + " ");
+
+                return false;
+            }
+        }
+
+        public TextRange CaretAfterMove(IC10Editor ed)
+        {
+            var startPos = ed.CaretPos;
+            var pos = ed.CaretPos;
+            string cmd = Movement != '\0' ? $"{Movement}" : Command;
+            switch (cmd)
+            {
+                case "dd":
+                case "yy":
+                    startPos.Col = 0;
+                    pos.Line = startPos.Line + (int)Count - 1;
+                    pos = ed.Clamp(pos);
+                    pos.Col = ed.Lines[pos.Line].Length + 1;
+                    return new TextRange(startPos, pos);
+                case "j":
+                    pos = ed.Move(pos, new MoveAction(MoveToken.Line, true, Count));
+                    break;
+                case "J":
+                    pos = ed.Move(pos, new MoveAction(MoveToken.Line, true, Count));
+                    startPos.Col = 0;
+                    break;
+                case "k":
+                    pos = ed.Move(pos, new MoveAction(MoveToken.Line, false, Count));
+                    break;
+                case "h":
+                    pos = ed.Move(pos, new MoveAction(MoveToken.Char, false, Count));
+                    break;
+                case "l":
+                case "a":
+                    pos = ed.Move(pos, new MoveAction(MoveToken.Char, true, Count));
+                    break;
+                case "x":
+                case "r":
+                    pos.Col += (int)Count;
+                    pos.Col = Math.Min(pos.Col, ed.Lines[pos.Line].Length);
+                    break;
+                case "w":
+                    pos = ed.Move(pos, new MoveAction(MoveToken.WordBeginning, true, Count));
+                    break;
+                case "b":
+                    pos = ed.Move(pos, new MoveAction(MoveToken.WordBeginning, false, Count));
+                    break;
+                case "0":
+                    pos = new TextPosition(pos.Line, 0);
+                    break;
+                case "$":
+                    pos = new TextPosition(pos.Line, ed.Lines[pos.Line].Length - 1);
+                    break;
+                case "C":
+                case "D":
+                    var newLine = pos.Line + (int)Count - 1;
+                    pos = new TextPosition(newLine, ed.Lines[newLine].Length);
+                    break;
+                case "I":
+                    var col = ed.CurrentLine.Length - ed.CurrentLine.TrimStart().Length;
+                    pos = new TextPosition(pos.Line, col);
+                    break;
+                case "A":
+                    pos = new TextPosition(pos.Line, ed.Lines[pos.Line].Length);
+                    break;
+                case "f":
+                    {
+                        var line = ed.Lines[pos.Line];
+                        var index = line.IndexOf(Argument, pos.Col + 1);
+                        if (index >= 0)
+                            pos = new TextPosition(pos.Line, index);
+                    }
+                    break;
+            }
+
+            return ed.Clamp(new TextRange(startPos, pos));
+        }
+
+        public string Execute(IC10Editor editor)
+        {
+            TextRange range;
+            if (editor.HaveSelection)
+                range = editor.Clamp(editor.Selection.Sorted());
+            else
+                range = CaretAfterMove(editor);
+
+            var status = "";
+            var nLines = range.End.Line - range.Start.Line + 1;
+            if (range.Start.Col > 0 || range.End.Col <= editor.Lines[range.End.Line].Length)
+                nLines = 0;
+            var sLines = $"{nLines} " + (nLines > 1 ? "lines" : "line");
+
+            switch (Command)
+            {
+                case "":
+                case "f":
+                case "h":
+                case "j":
+                case "k":
+                case "l":
+                case "w":
+                case "b":
+                case "0":
+                    L.Info($"Vim move command '{this}', moving caret to {range.End}");
+                    editor.CaretPos = range.End;
+                    break;
+                case "d":
+                case "D":
+                case "x":
+                case "dd":
+                    editor.DeleteRange(range);
+                    if (nLines > 0)
+                        status = $"Deleted {sLines}";
+                    break;
+                case "r":
+                    string oldCode = editor.GetCode(range);
+                    editor.DeleteRange(range);
+                    editor.Insert(Argument.PadRight(oldCode.Length, Argument[0]));
+                    break;
+                case "y":
+                case "yy":
+                    editor.CopyRange(range);
+                    if (nLines > 0)
+                        status = $"Yanked {sLines}";
+                    break;
+                case "c":
+                case "C":
+                    editor.KeyHandler.InsertMode();
+                    editor.DeleteRange(range, false);
+                    editor.CaretPos = range.Start;
+                    break;
+                case "O":
+                    editor.KeyHandler.InsertMode();
+                    editor.CaretPos = new TextPosition(editor.CaretLine, 0);
+                    editor.Insert("\n");
+                    editor.CaretPos = new TextPosition(editor.CaretLine - 1, 0);
+                    break;
+                case "o":
+                    editor.KeyHandler.InsertMode();
+                    editor.CaretPos = editor.Clamp(new TextPosition(editor.CaretLine + 1, 0));
+                    editor.Insert("\n");
+                    if (editor.CaretLine < editor.Lines.Count - 1)
+                        editor.CaretPos = new TextPosition(editor.CaretLine - 1, 0);
+                    break;
+                case "u":
+                    editor.Undo();
+                    break;
+                case "i":
+                case "a":
+                    editor.CaretPos = range.End;
+                    editor.KeyHandler.InsertMode();
+                    break;
+                case "I":
+                case "A":
+                    editor.CaretPos = range.End;
+                    editor.KeyHandler.InsertMode();
+                    break;
+                case "J":
+                    if (range.End.Line > range.Start.Line)
+                    {
+                        var newCode = editor.GetCode(range).Replace("\n", " ");
+                        editor.KeyHandler.OnKeyPressed($"J - Join lines, range={range}, newCode='{newCode}', oldCode='{editor.GetCode(range)}'");
+                        editor.DeleteRange(range);
+                        editor.Insert(newCode);
+                    }
+                    break;
+                case "gg":
+                    editor.CaretLine = (int)_count;
+                    break;
+                case "G":
+                    editor.CaretLine = editor.Lines.Count - 1;
+                    break;
+                case "p":
+                    editor.PushUndoState(false);
+                    var code = GameManager.Clipboard.Replace("\r", "");
+                    bool insertLines = code.EndsWith("\n");
+                    if (insertLines)
+                    {
+                        editor.CaretCol = 0;
+                        editor.CaretLine += 1;
+                        var posBefore = editor.CaretPos;
+                        editor.Insert(code);
+                        editor.CaretPos = posBefore;
+                    }
+                    else
+                    {
+                        editor.CaretCol += 1;
+                        editor.Insert(code);
+                    }
+                    break;
+                case "P":
+                    editor.PushUndoState(false);
+                    code = GameManager.Clipboard.Replace("\r", "");
+                    insertLines = code.EndsWith("\n");
+                    if (insertLines)
+                    {
+                        editor.CaretCol = 0;
+                        var posBefore = editor.CaretPos;
+                        editor.Insert(code);
+                        editor.CaretPos = posBefore;
+                    }
+                    else
+                    {
+                        editor.Insert(code);
+                    }
+                    break;
+            }
+            return status;
+        }
+    }
+
     public class KeyHandler
     {
         public Action<string> OnKeyPressed = delegate { };
@@ -57,7 +355,7 @@ namespace StationeersIC10Editor
 
         TextPosition Move(TextPosition pos, MoveAction action)
         {
-            return Editor.Move(pos, action);
+            return Editor.Clamp(Editor.Move(pos, action));
         }
 
         public bool IsMouseIdle(double idleTime)
@@ -66,13 +364,35 @@ namespace StationeersIC10Editor
         }
 
 
+        public void InsertMode()
+        {
+            if (Mode == KeyMode.Insert)
+                return;
+            Editor.PushUndoState(false);
+            Mode = KeyMode.Insert;
+            ResetCommandState();
+        }
+
+        private string CommandStatus = "";
+
         public void DrawStatus()
         {
             if (VimEnabled)
             {
-                String status = $"Mode: {Mode}";
+                String status = $"Mode: {Mode} ";
                 ImGui.Text(status);
                 ImGui.SameLine();
+
+                if (Mode == KeyMode.VimNormal)
+                {
+                    if (String.IsNullOrEmpty(CommandStatus))
+                    {
+                        ImGui.Text($"{CurrentCommand}");
+                        ImGui.SameLine();
+                    }
+                    ImGui.Text($"{CommandStatus}");
+                    ImGui.SameLine();
+                }
             }
         }
 
@@ -121,6 +441,7 @@ namespace StationeersIC10Editor
                         Editor.Selection.Start = range.Start;
                         Editor.Selection.End = range.End;
                         CaretPos = range.End;
+                        InsertMode();
                     }
                     else if (ImGui.IsMouseClicked(0)) // Left click
                     {
@@ -258,6 +579,7 @@ namespace StationeersIC10Editor
             {
                 OnKeyPressed("Escape - to Normal mode");
                 Mode = KeyMode.VimNormal;
+                CurrentCommand.Reset();
                 if (CaretCol > 0)
                     CaretCol--;
                 return;
@@ -308,7 +630,8 @@ namespace StationeersIC10Editor
             if (ImGui.IsKeyPressed(ImGuiKey.Enter))
             {
                 OnKeyPressed("Enter");
-                Editor.PushUndoState();
+                if (!VimEnabled)
+                    Editor.PushUndoState();
                 string newLine = CurrentLine.Substring(CaretCol);
                 CurrentLine = CurrentLine.Substring(0, CaretCol);
                 Editor.Lines.Insert(CaretLine + 1, newLine);
@@ -321,13 +644,16 @@ namespace StationeersIC10Editor
             for (int i = 0; i < io.InputQueueCharacters.Size; i++)
             {
                 char c = (char)io.InputQueueCharacters[i];
-                input += c;
+                if (c == '\t')
+                    input += "  ";
+                else
+                    input += c;
             }
 
             if (input.Length > 0)
             {
                 OnKeyPressed($"{input}");
-                if (!Editor.DeleteSelectedCode())
+                if (!Editor.DeleteSelectedCode() && !VimEnabled)
                 {
                     L.Info($"Pushing undo state for input: {input}");
                     Editor.PushUndoState();
@@ -338,137 +664,84 @@ namespace StationeersIC10Editor
             }
         }
 
+        private VimCommand CurrentCommand = new VimCommand();
+        private VimCommand LastCommand = new VimCommand();
+        private VimCommand LastFindCommand = new VimCommand();
+
+        private void ResetCommandState()
+        {
+            if (CurrentCommand.IsComplete)
+            {
+                if (CurrentCommand.Command == "f")
+                    LastFindCommand = CurrentCommand;
+                else
+                    LastCommand = CurrentCommand;
+            }
+            CurrentCommand.Reset();
+        }
+
+        private TextRange LineRange(int line, uint count)
+        {
+            int endLine = line + (int)count;
+            if (endLine > Editor.Lines.Count)
+                endLine = Editor.Lines.Count;
+            return Editor.Clamp(new TextRange(new TextPosition(line, 0), new TextPosition(endLine, 0)));
+        }
+
         public void HandleVimNormalMode(bool ctrlDown, bool shiftDown)
         {
             var io = ImGui.GetIO();
-
-            if (ImGui.IsKeyPressed(ImGuiKey.U))
-            {
-                OnKeyPressed("U - Undo");
-            }
 
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             {
                 // these combos are not captured by ImGui for some reason, so handle them via Unity Input
                 if (Input.GetKeyDown(KeyCode.U))
                 {
-                    OnKeyPressed("Ctrl+U - Move up 20 lines");
+                    OnKeyPressed("Ctrl+U");
                     CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 20));
                 }
                 if (Input.GetKeyDown(KeyCode.D))
                 {
-                    OnKeyPressed("Ctrl+D - Move down 20 lines");
+                    OnKeyPressed("Ctrl+D");
                     CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 20));
                 }
                 if (Input.GetKeyDown(KeyCode.R))
                 {
-                    OnKeyPressed("Ctrl+R - Redo");
+                    OnKeyPressed("Ctrl+R");
                     Editor.Redo();
                 }
             }
 
-            for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+            for (int iChar = 0; iChar < io.InputQueueCharacters.Size; iChar++)
             {
-                char c = (char)io.InputQueueCharacters[i];
+                CommandStatus = "";
+                char c = (char)io.InputQueueCharacters[iChar];
 
                 if (ctrlDown)
                     break;
 
                 OnKeyPressed($"{c}");
 
-                switch (c)
+                if (c == '.')
                 {
-                    case 'I':
-                        Mode = KeyMode.Insert;
-                        var line = CurrentLine;
-                        int col = 0;
-                        if (line.Length > 0 && !string.IsNullOrWhiteSpace(line))
-                            while (col < line.Length - 1 && char.IsWhiteSpace(line[col]))
-                                col++;
-                        CaretCol = col;
-                        break;
-                    case 'A':
-                        Mode = KeyMode.Insert;
-                        CaretCol = CurrentLine.Length;
-                        break;
-                    case 'O':
-                        Editor.PushUndoState();
-                        CaretPos = new TextPosition(CaretLine, 0);
-                        Editor.Insert("\n");
-                        CaretPos = new TextPosition(CaretLine - 1, 0);
-                        Mode = KeyMode.Insert;
-                        break;
-                    case 'o':
-                        Editor.PushUndoState();
-                        CaretPos = new TextPosition(CaretLine + 1, 0);
-                        Editor.Insert("\n");
-                        CaretPos = new TextPosition(CaretLine - 1, 0);
-                        Mode = KeyMode.Insert;
-                        break;
-                    case 'J':
-                        if (CaretLine < Editor.Lines.Count - 1)
-                        {
-                            Editor.PushUndoState();
-                            int lengthBefore = CurrentLine.Length;
-                            CurrentLine = CurrentLine + Editor.Lines[CaretLine + 1];
-                            Editor.RemoveLine(CaretLine + 1);
-                            CaretCol = Math.Max(0, Math.Min(lengthBefore, CurrentLine.Length - 1));
-                        }
-                        break;
-                    case 'i':
-                        Mode = KeyMode.Insert;
-                        break;
+                    if (LastCommand.IsComplete)
+                        CommandStatus = LastCommand.Execute(Editor);
+                    continue;
+                }
 
-                    case 'x':
-                        Editor.PushUndoState();
-                        CurrentLine = CurrentLine.Remove(CaretCol, 1);
-                        break;
+                if (c == ';')
+                {
+                    if (LastFindCommand.IsComplete)
+                        CommandStatus = LastFindCommand.Execute(Editor);
+                    continue;
+                }
 
-                    case 'j':
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, true, 1));
-                        break;
-                    case 'k':
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.Line, false, 1));
-                        break;
-                    case 'h':
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.Char, false, 1));
-                        break;
-                    case 'l':
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.Char, true, 1));
-                        break;
-                    case 'G':
-                        CaretLine = Math.Max(0, Editor.Lines.Count - 1);
-                        break;
-                    case '0':
-                        CaretCol = 0;
-                        break;
-                    case '$':
-                        CaretCol = Math.Max(0, CurrentLine.Length - 1);
-                        break;
 
-                    case 'w':
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.WordBeginning, true, 1));
-                        break;
-                    case 'b':
-                        CaretPos = Move(CaretPos, new MoveAction(MoveToken.WordBeginning, false, 1));
-                        break;
-                    case 'D':
-                        Editor.PushUndoState(false);
-                        CurrentLine = CurrentLine.Substring(0, CaretCol);
-                        CaretCol = Math.Max(CaretCol - 1, 0);
-                        break;
-
-                    case 'C':
-                        Editor.PushUndoState(false);
-                        CurrentLine = CurrentLine.Substring(0, CaretCol);
-                        Mode = KeyMode.Insert;
-                        break;
-                    case 'u':
-                        Editor.Undo();
-                        break;
-
-                    default:
-                        break;
+                CurrentCommand.AddChar(c);
+                if (CurrentCommand.IsComplete)
+                {
+                    CommandStatus = CurrentCommand.Execute(Editor);
+                    ResetCommandState();
                 }
             }
         }

@@ -51,7 +51,7 @@ namespace StationeersIC10Editor
 
         public static bool IsWordChar(char c)
         {
-            return char.IsLetterOrDigit(c) || c == '_';
+            return char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '-';
         }
 
         public bool IsWordBeginning(TextPosition pos)
@@ -224,14 +224,14 @@ namespace StationeersIC10Editor
             {
                 var pos = startPos;
                 for (int i = 0; i < action.Amount; i++)
-                    pos = FindWordBeginning(startPos, action.Forward);
+                    pos = FindWordBeginning(pos, action.Forward);
                 return pos;
             }
             if (action.Token == MoveToken.WordEnd)
             {
                 var pos = startPos;
                 for (int i = 0; i < action.Amount; i++)
-                    pos = FindWordEnd(startPos, action.Forward);
+                    pos = FindWordEnd(pos, action.Forward);
                 return pos;
             }
 
@@ -540,13 +540,19 @@ namespace StationeersIC10Editor
             DeleteSelectedCode();
         }
 
-        public void Copy()
+        public void CopyRange(TextRange range)
         {
-            string code = SelectedCode;
+            KeyHandler.OnKeyPressed($"copy range {range}");
+            string code = GetCode(range);
             if (code != null)
             {
                 GameManager.Clipboard = code;
             }
+        }
+
+        public void Copy()
+        {
+            CopyRange(Selection.Sorted());
         }
 
         public void Paste()
@@ -585,6 +591,9 @@ namespace StationeersIC10Editor
             // CodeFormatter.RemoveLine(CaretLine);
             string beforeCaret = CurrentLine.Substring(0, CaretCol);
             string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
+            L.Info($"Inserting code at {CaretLine},{CaretCol}: '{beforeCaret}|{afterCaret}'");
+            L.Info($"{newLines.Count} new lines: {newLines}");
+            L.Info($"starts with newline {code.StartsWith("\n")}, ends with newline {code.EndsWith("\n")}");
             if (newLines.Count == 1)
             {
                 CurrentLine = beforeCaret + newLines[0] + afterCaret;
@@ -599,7 +608,6 @@ namespace StationeersIC10Editor
             for (var j = 0; j < newLines.Count; j++)
                 CodeFormatter.InsertLine(CaretLine + 1 + j, newLines[j]);
 
-
             CaretPos = new TextPosition(
                 CaretLine + newLines.Count,
                 newCaretCol);
@@ -609,44 +617,84 @@ namespace StationeersIC10Editor
 
         public string GetCode(TextRange range)
         {
+            L.Info("GetCode called with range: " + range);
             var start = range.Start;
             var end = range.End;
+            var suffix = "";
+
+            if (end.Col > Lines[end.Line].Length)
+            {
+                end.Col = Lines[end.Line].Length;
+                suffix = "\n";
+            }
 
             if (start.Line == end.Line)
-                return Lines[start.Line].Substring(start.Col, end.Col - start.Col);
+                return Lines[start.Line].Substring(start.Col, end.Col - start.Col) + suffix;
 
             string code = Lines[start.Line].Substring(start.Col);
             for (int i = start.Line + 1; i < end.Line; i++)
                 code += '\n' + Lines[i];
 
             code += '\n' + Lines[end.Line].Substring(0, end.Col);
-            return code;
+            return code + suffix;
         }
 
         public string SelectedCode => GetCode(Selection.Sorted());
 
-        public bool DeleteRange(TextRange range)
+        public TextPosition Clamp(TextPosition pos)
         {
-            L.Info($"DeleteRange: {range.Start.Line},{range.Start.Col} - {range.End.Line},{range.End.Col}");
+            if (pos.Line < 0)
+            {
+                pos.Line = 0;
+                pos.Col = 0;
+            }
+            else if (pos.Line >= Lines.Count)
+            {
+                pos.Line = Lines.Count - 1;
+                pos.Col = Lines[pos.Line].Length;
+            }
+            else if (pos.Col < 0)
+                pos.Col = 0;
+            else if (pos.Col > Lines[pos.Line].Length)
+                pos.Col = Lines[pos.Line].Length;
+            return pos;
+        }
+
+        public TextRange Clamp(TextRange range)
+        {
+            range.Start = Clamp(range.Start);
+            range.End = Clamp(range.End);
+            return range;
+        }
+
+        public bool DeleteRange(TextRange range, bool pushUndo = true)
+        {
             if (!(bool)range)
                 return false;
 
-            L.Info("Valid range");
-
             range = range.Sorted();
+            bool removeLast = range.End.Col > Lines[range.End.Line].Length;
+            range = Clamp(range);
 
-            L.Info($"SortedRange: {range.Start.Line},{range.Start.Col} - {range.End.Line},{range.End.Col}");
-
-            PushUndoState(false);
+            if (pushUndo)
+                PushUndoState(false);
 
             var start = range.Start;
             var end = range.End;
+            KeyHandler.OnKeyPressed($"removeLast: {removeLast}");
+
             if (start.Line == end.Line)
             {
-                string line = Lines[start.Line];
-                string newLine =
-                    line.Substring(0, start.Col) + line.Substring(end.Col, line.Length - end.Col);
-                ReplaceLine(start.Line, newLine);
+                if (start.Col == 0 && removeLast)
+                    RemoveLine(start.Line);
+                else
+                {
+                    string line = Lines[start.Line];
+                    string newLine =
+                        line.Substring(0, start.Col) + line.Substring(end.Col, line.Length - end.Col);
+                    ReplaceLine(start.Line, newLine);
+
+                }
             }
             else
             {
@@ -661,6 +709,8 @@ namespace StationeersIC10Editor
                     CodeFormatter.RemoveLine(i);
                     Lines.RemoveAt(i);
                 }
+                if (removeLast)
+                    RemoveLine(start.Line);
             }
 
             CaretPos = start;
@@ -775,18 +825,14 @@ namespace StationeersIC10Editor
         public void DrawFooter()
         {
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
-            var sLines = $"{Lines.Count}".PadLeft(3, ' ');
-            var sBytes = $"{Code.Length}".PadLeft(4, ' ');
-            var sLine = $"{CaretLine}".PadLeft(3, ' ');
-            var sCol = $"{CaretCol}".PadLeft(2, ' ');
-            ImGui.Text($"Caret: {sLine},{sCol}  ");
+            ImGui.Text($"{CaretLine}/{CaretCol} ");
             ImGui.SameLine();
 
             var pos = ImGui.GetCursorScreenPos();
             var charWidth = ImGui.CalcTextSize("M").x;
 
-            sLines = $"{sLines}/128 lines ";
-            sBytes = $"{sBytes}/4096 bytes";
+            var sLines = $"{Lines.Count}/128 lines ";
+            var sBytes = $"{Code.Length}/4096 bytes";
             uint colorGood = ICodeFormatter.ColorFromHTML("green");
             uint colorWarning = ICodeFormatter.ColorFromHTML("orange");
             uint colorBad = ICodeFormatter.ColorFromHTML("red");
@@ -961,8 +1007,8 @@ namespace StationeersIC10Editor
                     new Vector2(pos.x + ImGui.CalcTextSize("M").x, pos.y + lineHeight2),
                     ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f)));
                 drawList.AddRect(
-                    new Vector2(pos.x-1, pos.y-1),
-                    new Vector2(pos.x+1 + ImGui.CalcTextSize("M").x, pos.y + lineHeight2+1),
+                    new Vector2(pos.x - 1, pos.y - 1),
+                    new Vector2(pos.x + 1 + ImGui.CalcTextSize("M").x, pos.y + lineHeight2 + 1),
                     ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f)));
             }
         }
@@ -1152,6 +1198,24 @@ namespace StationeersIC10Editor
                 "Closing the editor via escape key or Cancel button will not ask for confirmation, BUT you can always reopen the editor and Undo (Ctrl+Z) to get the state before cancelling.\n"
                 );
 
+            ImGui.Separator();
+
+            ImGui.TextWrapped(
+                "\nVIM Mode - Supported Commands:\n" +
+                "\n" +
+                "Movements (with optional number prefix):\n" +
+                "h j, k, l, w, b, 0, $, gg, G\n\n" +
+                "Editing (with optional number and movement):\n" +
+                "i I a A c C d D dd o O x y yy p u Ctrl+r\n\n" +
+                "Search:\n" +
+                "f\n\n" +
+                "Other:\n" +
+                ". ;\n\n" +
+                "Notes:\n" +
+                ". is not working for commands that switch to insert mode\n\n"
+                );
+
+            ImGui.Separator();
             ImGui.End();
             ImGui.PopStyleColor();
         }
@@ -1193,9 +1257,16 @@ namespace StationeersIC10Editor
                     _renderTimes.Dequeue();
             }
 
+            ImGui.Separator();
 
-            foreach (var key in _keyLog.Reverse())
+            bool lastWasChar = true;
+            foreach (var key in _keyLog)
+            {
+                if (lastWasChar && key.Length == 1)
+                    ImGui.SameLine();
                 ImGui.Text(key);
+                lastWasChar = key.Length == 1;
+            }
 
         }
 

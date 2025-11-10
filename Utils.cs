@@ -52,6 +52,11 @@ namespace StationeersIC10Editor
         {
             return (bool)range;
         }
+
+        public override string ToString()
+        {
+            return $"[{Start} - {End}]";
+        }
     }
 
     public struct TextPosition
@@ -114,6 +119,11 @@ namespace StationeersIC10Editor
         public static bool operator false(TextPosition pos)
         {
             return (bool)pos;
+        }
+
+        public override string ToString()
+        {
+            return $"({Line}, {Col})";
         }
     }
 }

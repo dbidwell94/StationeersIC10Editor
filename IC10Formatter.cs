@@ -144,6 +144,7 @@ namespace StationeersIC10Editor
                     case DataType.Register:
                         return ColorRegister;
                     case DataType.LogicType:
+                    case DataType.LogicSlotType:
                     case DataType.BatchMode:
                         return ColorLogicType;
                     case DataType.Instruction:
