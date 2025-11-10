@@ -779,7 +779,7 @@ namespace StationeersIC10Editor
             var sBytes = $"{Code.Length}".PadLeft(4, ' ');
             var sLine = $"{CaretLine}".PadLeft(3, ' ');
             var sCol = $"{CaretCol}".PadLeft(2, ' ');
-            ImGui.Text($"Caret: ({sLine},{sCol}), ");
+            ImGui.Text($"Caret: {sLine},{sCol}  ");
             ImGui.SameLine();
 
             var pos = ImGui.GetCursorScreenPos();
@@ -941,8 +941,6 @@ namespace StationeersIC10Editor
             var lineHeight = ImGui.GetTextLineHeight();
             var lineHeight2 = ImGui.GetTextLineHeightWithSpacing();
 
-            pos.y -= (lineHeight2 - lineHeight) / 2;
-
             if (KeyHandler.Mode == KeyMode.Insert)
             {
                 bool blinkOn = ((int)((ImGui.GetTime() - _timeLastAction) * 2) % 2) == 0;
@@ -962,6 +960,10 @@ namespace StationeersIC10Editor
                     new Vector2(pos.x, pos.y),
                     new Vector2(pos.x + ImGui.CalcTextSize("M").x, pos.y + lineHeight2),
                     ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f)));
+                drawList.AddRect(
+                    new Vector2(pos.x-1, pos.y-1),
+                    new Vector2(pos.x+1 + ImGui.CalcTextSize("M").x, pos.y + lineHeight2+1),
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f)));
             }
         }
 
