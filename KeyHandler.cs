@@ -70,7 +70,7 @@ namespace StationeersIC10Editor
         }
 
         private static readonly string _movements = "fthjklwb0$G";
-        private static readonly string _immediateSingleCharCommands = "aiuCDxIAOoJpPx" + _movements.Substring(2);
+        private static readonly string _immediateSingleCharCommands = "~aiuCDxIAOoJpPx" + _movements.Substring(2);
         private static readonly string _singleCharCommands = "cdry";
         private static readonly string _twoCharCommands = "dd yy cc gg gf << >> ";
 
@@ -366,6 +366,18 @@ namespace StationeersIC10Editor
                     break;
                 case "gf":
                     editor.KeyHandler.OpenStationPedia(editor.CaretPos);
+                    break;
+                case "~":
+                    editor.PushUndoState(false);
+                    var lineText = editor.Lines[editor.CaretLine];
+                    for (int col = editor.CaretCol; col < Math.Min(editor.CaretCol + (int)Count, lineText.Length); col++)
+                    {
+                        char c = lineText[col];
+                        char newC = char.IsUpper(c) ? char.ToLower(c) : char.ToUpper(c);
+                        lineText = lineText.Remove(col, 1).Insert(col, newC.ToString());
+                    }
+                    editor.ReplaceLine(editor.CaretLine, lineText);
+                    editor.CaretCol += (int)Count;
                     break;
                 case ":":
                     foreach (char c in Argument)
@@ -767,7 +779,7 @@ namespace StationeersIC10Editor
                 CurrentCommand.Execute(Editor);
                 if (CurrentCommand.IsFind)
                     LastFindCommand = CurrentCommand;
-                else if(!CurrentCommand.IsMovement)
+                else if (!CurrentCommand.IsMovement)
                     LastCommand = CurrentCommand;
                 CurrentCommand.Reset();
             }
