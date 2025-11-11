@@ -19,7 +19,7 @@ namespace StationeersIC10Editor
 
                 foreach (var line in Code)
                     foreach (var token in line)
-                        if (token.DataType == DataType.Register)
+                        if (token.DataType == DataType.Register && token.Text.StartsWith("r") && token.Text != "ra")
                         {
                             var reg = token.Text;
                             while (reg.StartsWith("rr") && reg.Length > 3)
