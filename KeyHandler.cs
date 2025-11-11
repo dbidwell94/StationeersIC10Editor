@@ -173,6 +173,10 @@ namespace StationeersIC10Editor
                             pos = new TextPosition(pos.Line, index);
                     }
                     break;
+                case "G":
+                    pos.Line = ed.Lines.Count - 1;
+                    pos.Col = ed.Lines[pos.Line].Length + 1;
+                    break;
             }
 
             return ed.Clamp(new TextRange(startPos, pos));
@@ -203,6 +207,7 @@ namespace StationeersIC10Editor
                 case "w":
                 case "b":
                 case "0":
+                case "G":
                     L.Info($"Vim move command '{this}', moving caret to {range.End}");
                     editor.CaretPos = range.End;
                     break;
@@ -268,9 +273,6 @@ namespace StationeersIC10Editor
                     break;
                 case "gg":
                     editor.CaretLine = (int)_count;
-                    break;
-                case "G":
-                    editor.CaretLine = editor.Lines.Count - 1;
                     break;
                 case "p":
                     editor.PushUndoState(false);
