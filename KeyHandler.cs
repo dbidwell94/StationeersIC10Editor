@@ -72,7 +72,7 @@ namespace StationeersIC10Editor
         private static readonly string _movements = "fthjklwb0$G";
         private static readonly string _immediateSingleCharCommands = "aiuCDxIAOoJpPx" + _movements.Substring(2);
         private static readonly string _singleCharCommands = "cdry";
-        private static readonly string _twoCharCommands = "dd yy cc gg << >> ";
+        private static readonly string _twoCharCommands = "dd yy cc gg gf << >> ";
 
         private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft:<>";
 
@@ -100,6 +100,9 @@ namespace StationeersIC10Editor
         {
             get
             {
+                if (Command == "gf")
+                    return true;
+
                 if (Command == ":")
                     return Argument.EndsWith("\n");
 
@@ -216,6 +219,7 @@ namespace StationeersIC10Editor
 
         public string Execute(IC10Editor editor)
         {
+            L.Info($"Executing Vim command: {this.ToString()}");
             TextRange range;
             if (editor.HaveSelection)
                 range = editor.Clamp(editor.Selection.Sorted());
@@ -359,6 +363,9 @@ namespace StationeersIC10Editor
                         else if (Command == ">>")
                             editor.ReplaceLine(line, "  " + currentLine);
                     }
+                    break;
+                case "gf":
+                    editor.KeyHandler.OpenStationPedia(editor.CaretPos);
                     break;
                 case ":":
                     foreach (char c in Argument)

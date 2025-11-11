@@ -1214,11 +1214,12 @@ namespace StationeersIC10Editor
                 "Editing (with optional number and movement or search):\n" +
                 "i I a A c C d D dd o O x y yy p << >> u Ctrl+r\n\n" +
                 "Search:\n" +
-                "f t\n\n" +
+                "f t gf\n\n" +
                 "Other:\n" +
                 ". ; :w :wq :q\n\n" +
                 "Notes:\n" +
-                ". is not working for commands that switch to insert mode\n\n"
+                "gf opens Stationpedia page of hash/name at cursor\n\n" +
+                ".  is not working for commands that switch to insert mode\n\n"
                 );
 
             ImGui.Separator();
