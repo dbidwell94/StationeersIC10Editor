@@ -67,9 +67,9 @@ namespace StationeersIC10Editor
         private static readonly string _movements = "fthjklwb0$G";
         private static readonly string _immediateSingleCharCommands = "aiuCDxIAOoJpPx" + _movements.Substring(2);
         private static readonly string _singleCharCommands = "cdry";
-        private static readonly string _twoCharCommands = "dd yy cc gg ";
+        private static readonly string _twoCharCommands = "dd yy cc gg << >> ";
 
-        private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft:";
+        private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft:<>";
 
         public bool IsValid
         {
@@ -123,6 +123,8 @@ namespace StationeersIC10Editor
             {
                 case "dd":
                 case "yy":
+                case "<<":
+                case ">>":
                     startPos.Col = 0;
                     pos.Line = startPos.Line + (int)Count - 1;
                     pos = ed.Clamp(pos);
@@ -339,6 +341,18 @@ namespace StationeersIC10Editor
                         {
                             editor.Insert(code);
                         }
+                    }
+                    break;
+                case "<<":
+                case ">>":
+                    editor.PushUndoState();
+                    for (int line = range.Start.Line; line <= range.End.Line; line++)
+                    {
+                        var currentLine = editor.Lines[line];
+                        if (Command == "<<" && currentLine.StartsWith("  "))
+                            editor.ReplaceLine(line, currentLine.Substring(2));
+                        else if (Command == ">>")
+                            editor.ReplaceLine(line, "  " + currentLine);
                     }
                     break;
                 case ":":
