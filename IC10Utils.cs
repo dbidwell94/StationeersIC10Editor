@@ -531,7 +531,7 @@ namespace StationeersIC10Editor
                                 token.Tooltip = thing.PrefabName + "\n";
                         }
                     }
-                    else if (token.Text.StartsWith("0x") && int.TryParse(token.Text.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out int hexNumber))
+                    else if (token.Text.StartsWith("$") && long.TryParse(token.Text.Substring(1), System.Globalization.NumberStyles.HexNumber, null, out long hexNumber))
                         token.DataType = DataType.Number;
                     else if (IsHashExpression(token.Text) || IsStringExpression(token.Text))
                         token.DataType = DataType.Number;
