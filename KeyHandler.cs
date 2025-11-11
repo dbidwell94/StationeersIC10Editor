@@ -410,7 +410,6 @@ namespace StationeersIC10Editor
         IC10Editor Editor;
         public KeyMode Mode = KeyMode.Insert;
 
-        private double _timeLastEscape = 0.0;
         private bool _isSelecting = false;
         private double _timeLastMouseMove = 0.0;
         private Vector2 _lastMousePos = new Vector2(0, 0);
@@ -464,7 +463,7 @@ namespace StationeersIC10Editor
             CurrentCommand.Reset();
         }
 
-        private string CommandStatus = "";
+        public string CommandStatus = "";
 
         public void DrawStatus()
         {
@@ -564,9 +563,11 @@ namespace StationeersIC10Editor
             {
                 // these combos are not captured by ImGui for some reason, so handle them via Unity Input
                 if (Input.GetKeyDown(KeyCode.S))
-                    Editor.Confirm();
+                    Editor.Write();
                 if (Input.GetKeyDown(KeyCode.E))
                     Editor.Export();
+                if (Input.GetKeyDown(KeyCode.Q))
+                    Editor.HideWindow();
             }
 
             if (ctrlDown)
@@ -600,25 +601,6 @@ namespace StationeersIC10Editor
                 {
                     Editor.Redo();
                     OnKeyPressed("Ctrl+Y - Redo");
-                }
-
-                // for (int i = 0; i < io.InputQueueCharacters.Size; i++)
-                // {
-                //     var ic = io.InputQueueCharacters[i];
-                //     char c = (char)ic;
-                // }
-            }
-            else
-            {
-                if (ImGui.IsKeyReleased(ImGuiKey.Escape))
-                {
-                    // Use IsKeyReleased instead of KeyPressed, otherwise
-                    // Unity would also capture the key press and open the game menu
-                    double timeNow = ImGui.GetTime();
-                    if (timeNow < _timeLastEscape + 1.0)
-                        Editor.HideWindow();
-                    _timeLastEscape = timeNow;
-                    OnKeyPressed("Escape");
                 }
             }
 

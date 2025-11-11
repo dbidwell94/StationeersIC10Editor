@@ -398,13 +398,6 @@ namespace StationeersIC10Editor
                     RemoveDictEntry(defines, line[1].Text, DataType.Number);
             }
 
-            public override uint GetBackground(string token)
-            {
-                if (IC10Utils.Colors.TryGetValue(token, out uint color))
-                    return color;
-                return 0;
-            }
-
             public static void DrawColoredText(List<ColoredTextSegment> input)
             {
                 var pos = ImGui.GetCursorScreenPos();

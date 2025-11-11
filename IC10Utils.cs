@@ -31,6 +31,7 @@ namespace StationeersIC10Editor
             LogicSlotType = 0x800,
             ReagentMode = 0x1000,
             Color = 0x2000,
+            DeviceId = 0x4000,
         }
 
         public class IC10Utils
@@ -352,6 +353,8 @@ namespace StationeersIC10Editor
                   at.Add(DataType.Color);
                 }
                 if (Has(DataType.Label)) at.Add(DataType.Number, DataType.Register);
+                if (Has(DataType.DeviceId)) at.Add(DataType.Number, DataType.Register);
+                if (Has(DataType.BatchMode)) at.Add(DataType.Number);
                 return at;
               }
             }
@@ -415,9 +418,11 @@ namespace StationeersIC10Editor
                             case "d?":
                                 argType.Add(DataType.Device);
                                 break;
+                            case "id":
+                                argType.Add(DataType.DeviceId);
+                                break;
                             case "num":
                             case "int":
-                            case "id":
                             case "deviceHash":
                             case "nameHash":
                             case "slotIndex":

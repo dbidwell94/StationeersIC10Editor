@@ -890,6 +890,7 @@ namespace StationeersIC10Editor
 
         public void Write()
         {
+            KeyHandler.CommandStatus = "Saved";
             _pcm.InputFinished(Code);
         }
 
@@ -1183,9 +1184,9 @@ namespace StationeersIC10Editor
                 "Home/End       Move caret to start/end of line\n" +
                 "Page Up/Down   Move caret up/down by 20 lines\n" +
                 "Shift+Arrow    Select text while moving caret\n" +
-                "2 * Escape     Cancel\n" +
-                "Ctrl+S         Save and confirm changes\n" +
-                "Ctrl+E         Save + export code to ic chip\n" +
+                "Ctrl+Q         Quit\n" +
+                "Ctrl+S         Save\n" +
+                "Ctrl+E         Save + export code to ic chip + close\n" +
                 "Ctrl+Z         Undo\n" +
                 "Ctrl+Y         Redo\n" +
                 "Ctrl+C         Copy selected code\n" +
@@ -1201,7 +1202,7 @@ namespace StationeersIC10Editor
             ImGui.TextWrapped(
                 "\nNotes:\n" +
                 "\n" +
-                "Closing the editor via escape key or Cancel button will not ask for confirmation, BUT you can always reopen the editor and Undo (Ctrl+Z) to get the state before cancelling.\n"
+                "Closing the editor via Ctrl+Q key or Cancel button will not ask for confirmation, BUT you can always reopen the editor and Undo (Ctrl+Z) to get the state before cancelling.\n"
                 );
 
             ImGui.Separator();

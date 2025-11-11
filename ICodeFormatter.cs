@@ -32,7 +32,6 @@ namespace StationeersIC10Editor
         public abstract void RemoveLine(int index);
         public abstract void InsertLine(int index, string line);
         public abstract void AppendLine(string line);
-        public abstract uint GetBackground(string token);
         public abstract bool DrawTooltip(string line, TextPosition caret, Vector2 pos);
 
         public static uint ColorFromHTML(string htmlColor)
