@@ -305,34 +305,40 @@ namespace StationeersIC10Editor
                     editor.PushUndoState(false);
                     var code = GameManager.Clipboard.Replace("\r", "");
                     bool insertLines = code.EndsWith("\n");
-                    if (insertLines)
+                    for (int i = 0; i < (int)Count; i++)
                     {
-                        editor.CaretCol = 0;
-                        editor.CaretLine += 1;
-                        var posBefore = editor.CaretPos;
-                        editor.Insert(code);
-                        editor.CaretPos = posBefore;
-                    }
-                    else
-                    {
-                        editor.CaretCol += 1;
-                        editor.Insert(code);
+                        if (insertLines)
+                        {
+                            editor.CaretCol = 0;
+                            editor.CaretLine += 1;
+                            var posBefore = editor.CaretPos;
+                            editor.Insert(code);
+                            editor.CaretPos = posBefore;
+                        }
+                        else
+                        {
+                            editor.CaretCol += 1;
+                            editor.Insert(code);
+                        }
                     }
                     break;
                 case "P":
                     editor.PushUndoState(false);
                     code = GameManager.Clipboard.Replace("\r", "");
                     insertLines = code.EndsWith("\n");
-                    if (insertLines)
+                    for (int i = 0; i < (int)Count; i++)
                     {
-                        editor.CaretCol = 0;
-                        var posBefore = editor.CaretPos;
-                        editor.Insert(code);
-                        editor.CaretPos = posBefore;
-                    }
-                    else
-                    {
-                        editor.Insert(code);
+                        if (insertLines)
+                        {
+                            editor.CaretCol = 0;
+                            var posBefore = editor.CaretPos;
+                            editor.Insert(code);
+                            editor.CaretPos = posBefore;
+                        }
+                        else
+                        {
+                            editor.Insert(code);
+                        }
                     }
                     break;
                 case ":":
