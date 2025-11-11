@@ -515,6 +515,22 @@ namespace StationeersIC10Editor
                 }
             }
 
+            public static bool IsDeviceChannel(string text)
+            {
+                if (!text.Contains(":"))
+                    return false;
+
+                var parts = text.Split(new char[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length != 2)
+                    return false;
+
+                bool isDevice = IC10Utils.Devices.Contains(parts[0]);
+                if (!isDevice)
+                    return false;
+
+                return Int32.TryParse(parts[1], out int channel) && channel >= 0 && channel <= 7;
+            }
+
             public static bool IsHashExpression(string text)
             {
                 return text.StartsWith("HASH(\"") && text.EndsWith("\")");
@@ -553,6 +569,8 @@ namespace StationeersIC10Editor
                         token.DataType = DataType.Number;
                     else if (IsHashExpression(token.Text) || IsStringExpression(token.Text))
                         token.DataType = DataType.Number;
+                    else if (IsDeviceChannel(token.Text))
+                        token.DataType = DataType.Device;
                     else
                         token.DataType = DataType.Unknown;
 
