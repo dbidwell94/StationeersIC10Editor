@@ -270,9 +270,10 @@ namespace StationeersIC10Editor
                     break;
                 case "o":
                     editor.KeyHandler.InsertMode();
+                    bool move = editor.CaretLine < editor.Lines.Count -1;
                     editor.CaretPos = editor.Clamp(new TextPosition(editor.CaretLine + 1, 0));
                     editor.Insert("\n");
-                    if (editor.CaretLine < editor.Lines.Count - 1)
+                    if (move)
                         editor.CaretPos = new TextPosition(editor.CaretLine - 1, 0);
                     break;
                 case "u":
