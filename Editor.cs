@@ -1211,11 +1211,11 @@ namespace StationeersIC10Editor
                 "Movements (with optional number prefix):\n" +
                 "h j, k, l, w, b, 0, $, gg, G\n\n" +
                 "Editing (with optional number and movement or search):\n" +
-                "i I a A c C d D dd o O x y yy p u Ctrl+r\n\n" +
+                "i I a A c C d D dd o O x y yy p << >> u Ctrl+r\n\n" +
                 "Search:\n" +
                 "f t\n\n" +
                 "Other:\n" +
-                ". ;\n\n" +
+                ". ; :w :wq :q\n\n" +
                 "Notes:\n" +
                 ". is not working for commands that switch to insert mode\n\n"
                 );
