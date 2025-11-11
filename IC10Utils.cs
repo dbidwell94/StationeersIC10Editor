@@ -292,11 +292,13 @@ namespace StationeersIC10Editor
             }
 
 
-            public void Add(DataType b, DataType b2 = 0, DataType b3 = 0)
+            public void Add(DataType b, DataType b2 = 0, DataType b3 = 0, DataType b4 = 0, DataType b5 = 0)
             {
                 Value |= (uint)b;
                 Value |= (uint)b2;
                 Value |= (uint)b3;
+                Value |= (uint)b4;
+                Value |= (uint)b5;
             }
 
             public DataType ToDataType()
@@ -339,6 +341,16 @@ namespace StationeersIC10Editor
                     return sb.ToString();
                 }
 
+            }
+
+            public ArgType Compat {
+              get {
+                ArgType at = new ArgType();
+                at.Value = this.Value;
+                if (Has(DataType.Number)) at.Add(DataType.Label, DataType.Register, DataType.LogicType, DataType.LogicSlotType, DataType.BatchMode);
+                if (Has(DataType.Label)) at.Add(DataType.Number, DataType.Register);
+                return at;
+              }
             }
         }
 
@@ -390,13 +402,12 @@ namespace StationeersIC10Editor
                     foreach (var token in s.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries))
                     {
                         var trimmed = token.Trim().TrimEnd(',', ')');
-                        argType.Add(DataType.Color);
                         switch (trimmed)
                         {
                             case "r?":
                                 argType.Add(DataType.Register);
                                 if (ArgumentTypes.Count > 0)
-                                    argType.Add(DataType.Number, DataType.Label, DataType.Color);
+                                    argType.Add(DataType.Number);
                                 break;
                             case "d?":
                                 argType.Add(DataType.Device);
@@ -407,7 +418,7 @@ namespace StationeersIC10Editor
                             case "deviceHash":
                             case "nameHash":
                             case "slotIndex":
-                                argType.Add(DataType.Number, DataType.Label, DataType.Color);
+                                argType.Add(DataType.Number, DataType.Register);
                                 break;
                             case "logicType":
                                 argType.Add(DataType.LogicType);
@@ -419,11 +430,10 @@ namespace StationeersIC10Editor
                                 argType.Add(DataType.BatchMode);
                                 break;
                             case "reagentMode":
-                                argType.Add(DataType.BatchMode);
+                                argType.Add(DataType.ReagentMode);
                                 break;
                             case "str":
-                                argType.Add(DataType.Identifier, DataType.Number, DataType.Label);
-                                argType.Add(DataType.Device);
+                                argType.Add(DataType.Identifier, DataType.Label, DataType.Device);
                                 break;
                             default:
                                 L.Warning($"Unknown argument token '{trimmed}' in opcode {name}");
@@ -564,13 +574,8 @@ namespace StationeersIC10Editor
                         var name = this[i + 1].Text;
                         ArgType actualType = IC10Utils.GetType(name);
                         actualType.Add(this[i + 1].DataType);
-                        if (!expectedType.Has(actualType))
+                        if (!expectedType.Compat.Has(actualType))
                         {
-                            // if(IC10Utils.IsBuiltin(this[i+1].Text) && expectedType.Has(DataType.LogicSlotType) && IC10Utils.GetType(this[i+1].Text).Has(DataType.LogicSlotType))
-                            // {
-                            //     // Some names are both LogicType and LogicSlotType, allow that
-                            //     continue;
-                            // }
                             this[i + 1].Color = ICodeFormatter.ColorError;
                             string expectedTypeStr = arguments[i].Description;
                             this[i + 1].Tooltip += $"Error: invalid argument type {actualType.Description}, expected {expectedTypeStr}";
