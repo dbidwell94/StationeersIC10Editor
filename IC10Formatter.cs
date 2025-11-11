@@ -188,8 +188,13 @@ namespace StationeersIC10Editor
 
             public static int FindNextWhitespace(string text, int startIndex)
             {
-                while (startIndex < text.Length && !char.IsWhiteSpace(text[startIndex]))
+                bool haveQuote = false;
+                while (startIndex < text.Length && (!char.IsWhiteSpace(text[startIndex]) || haveQuote))
+                {
+                    if (text[startIndex] == '\"')
+                        haveQuote = !haveQuote;
                     startIndex++;
+                }
 
                 return startIndex;
             }
@@ -215,14 +220,6 @@ namespace StationeersIC10Editor
                     comment = text.Substring(index);
                     text = text.Substring(0, index);
                 }
-
-                var findNextNonWhitespace = new Func<int, int>((start) =>
-                {
-                    int j = start;
-                    while (j < text.Length && char.IsWhiteSpace(text[j]))
-                        j++;
-                    return j;
-                });
 
                 int i = 0;
 
