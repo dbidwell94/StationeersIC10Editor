@@ -347,7 +347,10 @@ namespace StationeersIC10Editor
               get {
                 ArgType at = new ArgType();
                 at.Value = this.Value;
-                if (Has(DataType.Number)) at.Add(DataType.Label, DataType.Register, DataType.LogicType, DataType.LogicSlotType, DataType.BatchMode);
+                if (Has(DataType.Number)) {
+                  at.Add(DataType.Label, DataType.Register, DataType.LogicType, DataType.LogicSlotType, DataType.BatchMode);
+                  at.Add(DataType.Color);
+                }
                 if (Has(DataType.Label)) at.Add(DataType.Number, DataType.Register);
                 return at;
               }
@@ -581,6 +584,13 @@ namespace StationeersIC10Editor
                             this[i + 1].Tooltip += $"Error: invalid argument type {actualType.Description}, expected {expectedTypeStr}";
                         }
                     }
+                }
+                else {
+                  if(NumCodeTokens > 0 && !IsLabel && !IsAlias && !IsDefine && !this[0].IsComment)
+                  {
+                      this[0].Color = ICodeFormatter.ColorError;
+                      this[0].Tooltip += $"Error: unknown instruction '{this[0].Text}'\n";
+                  }
                 }
             }
         }
