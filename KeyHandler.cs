@@ -34,12 +34,17 @@ namespace StationeersIC10Editor
             Argument = "";
         }
 
+        public bool IsFind => Movement == 'f' || Movement == 't';
+        public bool IsMovement => Movement != '\0' && _movements.Contains(Movement.ToString());
+
         public void AddChar(char c)
         {
             if (Command == "r" || Command == ":" || Movement == 'f' || Movement == 't')
                 Argument += c.ToString();
             else if (char.IsDigit(c) && (_count > 0 || c != '0'))
                 Count = _count * 10 + (uint)(c - '0');
+            else if (Command.Length == 1 && _twoCharCommands.Contains($"{Command}{c} "))
+                Command += c;
             else if (_movements.Contains($"{c}"))
                 Movement = c;
             else
@@ -272,7 +277,7 @@ namespace StationeersIC10Editor
                     break;
                 case "o":
                     editor.KeyHandler.InsertMode();
-                    bool move = editor.CaretLine < editor.Lines.Count -1;
+                    bool move = editor.CaretLine < editor.Lines.Count - 1;
                     editor.CaretPos = editor.Clamp(new TextPosition(editor.CaretLine + 1, 0));
                     editor.Insert("\n");
                     if (move)
@@ -345,7 +350,7 @@ namespace StationeersIC10Editor
                     break;
                 case "<<":
                 case ">>":
-                    editor.PushUndoState();
+                    editor.PushUndoState(false);
                     for (int line = range.Start.Line; line <= range.End.Line; line++)
                     {
                         var currentLine = editor.Lines[line];
@@ -437,7 +442,7 @@ namespace StationeersIC10Editor
                 return;
             Editor.PushUndoState(false);
             Mode = KeyMode.Insert;
-            ResetCommandState();
+            CurrentCommand.Reset();
         }
 
         private string CommandStatus = "";
@@ -463,6 +468,24 @@ namespace StationeersIC10Editor
             }
         }
 
+        public void OpenStationPedia(TextPosition pos)
+        {
+            var name = Editor.GetCode(Editor.GetWordAt(pos));
+
+            if (Int32.TryParse(name, out var hash))
+            {
+                var thing = Prefab.Find<Thing>(hash);
+                if (thing == null) return;
+                name = thing.PrefabName;
+            }
+
+            name = "Thing" + name;
+
+            Stationpedia._linkIdLookup.TryGetValue(name, out var page);
+            if (page != null)
+                Stationpedia.Instance.OpenPageByKey(page.Key);
+        }
+
         public void HandleMouse(bool ctrlDown, bool shiftDown)
         {
             var mousePos = ImGui.GetMousePos();
@@ -479,21 +502,7 @@ namespace StationeersIC10Editor
                     if (ImGui.IsMouseReleased(0))
                     {
                         OnKeyPressed("Ctrl+Click");
-                        // open stationpedia page for word under mouse
-                        var name = Editor.GetCode(Editor.GetWordAt(Editor.GetTextPositionFromMouse()));
-
-                        if (Int32.TryParse(name, out var hash))
-                        {
-                            var thing = Prefab.Find<Thing>(hash);
-                            if (thing == null) return;
-                            name = thing.PrefabName;
-                        }
-
-                        name = "Thing" + name;
-
-                        Stationpedia._linkIdLookup.TryGetValue(name, out var page);
-                        if (page != null)
-                            Stationpedia.Instance.OpenPageByKey(page.Key);
+                        OpenStationPedia(Editor.GetTextPositionFromMouse());
                     }
                 }
                 else
@@ -698,7 +707,7 @@ namespace StationeersIC10Editor
             {
                 OnKeyPressed("Enter");
                 if (!VimEnabled)
-                    Editor.PushUndoState();
+                    Editor.PushUndoState(false);
                 string newLine = CurrentLine.Substring(CaretCol);
                 CurrentLine = CurrentLine.Substring(0, CaretCol);
                 Editor.Lines.Insert(CaretLine + 1, newLine);
@@ -735,18 +744,6 @@ namespace StationeersIC10Editor
         private VimCommand LastCommand = new VimCommand();
         private VimCommand LastFindCommand = new VimCommand();
 
-        private void ResetCommandState()
-        {
-            if (CurrentCommand.IsComplete)
-            {
-                if (CurrentCommand.Command == "f")
-                    LastFindCommand = CurrentCommand;
-                else
-                    LastCommand = CurrentCommand;
-            }
-            CurrentCommand.Reset();
-        }
-
         private TextRange LineRange(int line, uint count)
         {
             int endLine = line + (int)count;
@@ -760,8 +757,12 @@ namespace StationeersIC10Editor
         {
             if (CurrentCommand.IsComplete)
             {
-                CommandStatus = CurrentCommand.Execute(Editor);
-                ResetCommandState();
+                CurrentCommand.Execute(Editor);
+                if (CurrentCommand.IsFind)
+                    LastFindCommand = CurrentCommand;
+                else if(!CurrentCommand.IsMovement)
+                    LastCommand = CurrentCommand;
+                CurrentCommand.Reset();
             }
         }
 

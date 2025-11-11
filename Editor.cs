@@ -732,8 +732,9 @@ namespace StationeersIC10Editor
         public TextRange GetWordAt(TextPosition pos)
         {
             bool isWordChar = IsWordChar(this[pos]);
+            bool IsWordBeginning = pos.Col == 0 || (isWordChar && !IsWordChar(this[new TextPosition(pos.Line, pos.Col - 1)]));
 
-            var startPos = FindWordBeginning(pos, !isWordChar);
+            var startPos = IsWordBeginning ? pos : FindWordBeginning(pos, !isWordChar);
             var endPos = FindWordEnd(pos, isWordChar);
 
             return new TextRange(startPos, endPos);
