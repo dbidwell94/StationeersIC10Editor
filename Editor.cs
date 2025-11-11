@@ -887,9 +887,14 @@ namespace StationeersIC10Editor
         public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
         public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
 
-        public void Confirm()
+        public void Write()
         {
             _pcm.InputFinished(Code);
+        }
+
+        public void Confirm()
+        {
+            Write();
             HideWindow();
         }
 

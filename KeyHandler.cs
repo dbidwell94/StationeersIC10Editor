@@ -36,7 +36,7 @@ namespace StationeersIC10Editor
 
         public void AddChar(char c)
         {
-            if (Command == "r" || Movement == 'f' || Movement == 't')
+            if (Command == "r" || Command == ":" || Movement == 'f' || Movement == 't')
                 Argument += c.ToString();
             else if (char.IsDigit(c) && (_count > 0 || c != '0'))
                 Count = _count * 10 + (uint)(c - '0');
@@ -69,12 +69,15 @@ namespace StationeersIC10Editor
         private static readonly string _singleCharCommands = "cdry";
         private static readonly string _twoCharCommands = "dd yy cc gg ";
 
-        private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft";
+        private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft:";
 
         public bool IsValid
         {
             get
             {
+                if (Command == ":")
+                    return true;
+
                 if (Command.Length == 0)
                     return true;
 
@@ -92,6 +95,9 @@ namespace StationeersIC10Editor
         {
             get
             {
+                if (Command == ":")
+                    return Argument.EndsWith("\n");
+
                 if (Movement != '\0')
                     return (Movement != 'f' && Movement != 't') || Argument.Length == 1;
 
@@ -228,7 +234,6 @@ namespace StationeersIC10Editor
                 case "b":
                 case "0":
                 case "G":
-                    L.Info($"Vim move command '{this}', moving caret to {range.End}");
                     editor.CaretPos = range.End;
                     break;
                 case "d":
@@ -327,6 +332,24 @@ namespace StationeersIC10Editor
                     else
                     {
                         editor.Insert(code);
+                    }
+                    break;
+                case ":":
+                    foreach (char c in Argument)
+                    {
+                        switch (c)
+                        {
+                            case 'q':
+                                L.Info("Vim command :q - exiting editor");
+                                editor.HideWindow();
+                                status = "Exited editor";
+                                break;
+                            case 'w':
+                                L.Info("Vim command :w - writing editor");
+                                editor.Write();
+                                status = "Saved file";
+                                break;
+                        }
                     }
                     break;
             }
@@ -711,6 +734,16 @@ namespace StationeersIC10Editor
             return Editor.Clamp(new TextRange(new TextPosition(line, 0), new TextPosition(endLine, 0)));
         }
 
+
+        public void CheckCommand()
+        {
+            if (CurrentCommand.IsComplete)
+            {
+                CommandStatus = CurrentCommand.Execute(Editor);
+                ResetCommandState();
+            }
+        }
+
         public void HandleVimNormalMode(bool ctrlDown, bool shiftDown)
         {
             var io = ImGui.GetIO();
@@ -733,6 +766,35 @@ namespace StationeersIC10Editor
                     OnKeyPressed("Ctrl+R");
                     Editor.Redo();
                 }
+            }
+
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                CurrentCommand.Reset();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Backspace))
+            {
+                if (CurrentCommand.Command == ":")
+                    CurrentCommand.Argument = CurrentCommand.Argument.Length > 0 ? CurrentCommand.Argument.Substring(0, CurrentCommand.Argument.Length - 1) : "";
+                else
+                    CurrentCommand.Reset();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Return))
+            {
+                L.Info("Enter key in Vim Normal mode, command before: " + CurrentCommand.ToString());
+                if (CurrentCommand.Command == ":")
+                    CurrentCommand.AddChar('\n');
+                else
+                {
+                    CurrentCommand.Reset();
+                    CurrentCommand.AddChar('j');
+                }
+
+                L.Info("Enter key in Vim Normal mode, command now: " + CurrentCommand.ToString());
+
+                CheckCommand();
             }
 
             for (int iChar = 0; iChar < io.InputQueueCharacters.Size; iChar++)
@@ -761,11 +823,7 @@ namespace StationeersIC10Editor
 
 
                 CurrentCommand.AddChar(c);
-                if (CurrentCommand.IsComplete)
-                {
-                    CommandStatus = CurrentCommand.Execute(Editor);
-                    ResetCommandState();
-                }
+                CheckCommand();
             }
         }
 
