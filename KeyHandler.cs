@@ -215,6 +215,7 @@ namespace StationeersIC10Editor
                 case "D":
                 case "x":
                 case "dd":
+                    editor.CopyRange(range);
                     editor.DeleteRange(range);
                     if (nLines > 0)
                         status = $"Deleted {sLines}";
