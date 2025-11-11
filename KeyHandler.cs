@@ -36,7 +36,7 @@ namespace StationeersIC10Editor
 
         public void AddChar(char c)
         {
-            if (Command == "r" || Command == "f")
+            if (Command == "r" || Movement == 'f' || Movement == 't')
                 Argument += c.ToString();
             else if (char.IsDigit(c) && (_count > 0 || c != '0'))
                 Count = _count * 10 + (uint)(c - '0');
@@ -64,17 +64,20 @@ namespace StationeersIC10Editor
             return $"{Command}{sCount}{sMovement}{Argument}";
         }
 
-        private const string _movements = "hjklwb0$G";
-        private const string _immediateSingleCharCommands = "aiuCDxIAOoJpP" + _movements;
-        private const string _singleCharCommands = "cdfrxy";
-        private const string _twoCharCommands = "dd yy cc gg ";
+        private static readonly string _movements = "fthjklwb0$G";
+        private static readonly string _immediateSingleCharCommands = "aiuCDxIAOoJpPx" + _movements.Substring(2);
+        private static readonly string _singleCharCommands = "cdry";
+        private static readonly string _twoCharCommands = "dd yy cc gg ";
 
-        private const string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "g";
+        private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft";
 
         public bool IsValid
         {
             get
             {
+                if (Command.Length == 0)
+                    return true;
+
                 if (Command.Length > 2)
                     return false;
 
@@ -90,13 +93,13 @@ namespace StationeersIC10Editor
             get
             {
                 if (Movement != '\0')
-                    return true;
+                    return (Movement != 'f' && Movement != 't') || Argument.Length == 1;
 
                 if (Command.Length == 1)
                     if (_immediateSingleCharCommands.Contains(Command))
                         return true;
                     else
-                        return (Command == "f" || Command == "r") && Argument.Length == 1;
+                        return _singleCharCommands.Contains(Command) && Argument.Length == 1;
 
                 if (Command.Length == 2)
                     return _twoCharCommands.Contains(Command + " ");
@@ -166,11 +169,27 @@ namespace StationeersIC10Editor
                     pos = new TextPosition(pos.Line, ed.Lines[pos.Line].Length);
                     break;
                 case "f":
+                case "t":
                     {
                         var line = ed.Lines[pos.Line];
-                        var index = line.IndexOf(Argument, pos.Col + 1);
-                        if (index >= 0)
-                            pos = new TextPosition(pos.Line, index);
+                        var newCol = pos.Col;
+                        var apply = true;
+                        for (int i = 0; i < Count; i++)
+                        {
+                            var index = line.IndexOf(Argument, pos.Col + 1);
+                            if (index == -1)
+                            {
+                                apply = false;
+                                break;
+                            }
+                            newCol = index;
+                            if (!string.IsNullOrEmpty(Command))
+                                newCol += 1;
+                            if (cmd == "t")
+                                newCol -= 1;
+                        }
+                        if (apply)
+                            pos.Col = newCol;
                     }
                     break;
                 case "G":
@@ -200,6 +219,7 @@ namespace StationeersIC10Editor
             {
                 case "":
                 case "f":
+                case "t":
                 case "h":
                 case "j":
                 case "k":
