@@ -314,6 +314,7 @@ namespace StationeersIC10Editor
                     break;
                 case "p":
                     editor.PushUndoState(false);
+                    var linesBefore = editor.Lines.Count;
                     var code = GameManager.Clipboard.Replace("\r", "");
                     bool insertLines = code.EndsWith("\n");
                     for (int i = 0; i < (int)Count; i++)
@@ -332,9 +333,12 @@ namespace StationeersIC10Editor
                             editor.Insert(code);
                         }
                     }
+                    nLines = editor.Lines.Count - linesBefore;
+                    status = $"Pasted {nLines} line" + (nLines > 1 ? "s" : "");
                     break;
                 case "P":
                     editor.PushUndoState(false);
+                    linesBefore = editor.Lines.Count;
                     code = GameManager.Clipboard.Replace("\r", "");
                     insertLines = code.EndsWith("\n");
                     for (int i = 0; i < (int)Count; i++)
@@ -351,6 +355,8 @@ namespace StationeersIC10Editor
                             editor.Insert(code);
                         }
                     }
+                    nLines = editor.Lines.Count - linesBefore;
+                    status = $"Pasted {nLines} line" + (nLines > 1 ? "s" : "");
                     break;
                 case "<<":
                 case ">>":
@@ -758,7 +764,7 @@ namespace StationeersIC10Editor
         {
             if (CurrentCommand.IsComplete)
             {
-                CurrentCommand.Execute(Editor);
+                CommandStatus = CurrentCommand.Execute(Editor);
                 if (CurrentCommand.IsFind)
                     LastFindCommand = CurrentCommand;
                 else if (!CurrentCommand.IsMovement)
