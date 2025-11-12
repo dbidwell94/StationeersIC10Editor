@@ -35,11 +35,13 @@ namespace StationeersIC10Editor
         }
 
         public bool IsFind => Movement == 'f' || Movement == 't';
+        public bool IsSearch => Command == "*" || Command == "/" || Command == "?";
         public bool IsMovement => Movement != '\0' && _movements.Contains(Movement.ToString());
+        public bool IsLineCommand => Command.Length == 1 && _lineCommands.Contains(Command);
 
         public void AddChar(char c)
         {
-            if (Command == "r" || Command == ":" || Movement == 'f' || Movement == 't')
+            if (Command == "r" || Movement == 'f' || Movement == 't' || IsLineCommand)
                 Argument += c.ToString();
             else if (char.IsDigit(c) && (_count > 0 || c != '0'))
                 Count = _count * 10 + (uint)(c - '0');
@@ -70,9 +72,10 @@ namespace StationeersIC10Editor
         }
 
         private static readonly string _movements = "fthjklwb0$G";
-        private static readonly string _immediateSingleCharCommands = "~aiuCDxIAOoJpPx" + _movements.Substring(2);
+        private static readonly string _immediateSingleCharCommands = "*~aiuCDxIAOoJpPx" + _movements.Substring(2);
         private static readonly string _singleCharCommands = "cdry";
         private static readonly string _twoCharCommands = "dd yy cc gg gf << >> ";
+        private static readonly string _lineCommands = "/:?"; // commands that read argument until Enter is pressed
 
         private static readonly string _validFirstChars = _immediateSingleCharCommands + _singleCharCommands + "gft:<>";
 
@@ -80,7 +83,7 @@ namespace StationeersIC10Editor
         {
             get
             {
-                if (Command == ":")
+                if (IsLineCommand)
                     return true;
 
                 if (Command.Length == 0)
@@ -103,7 +106,7 @@ namespace StationeersIC10Editor
                 if (Command == "gf")
                     return true;
 
-                if (Command == ":")
+                if (IsLineCommand)
                     return Argument.EndsWith("\n");
 
                 if (Movement != '\0')
@@ -399,6 +402,28 @@ namespace StationeersIC10Editor
                                 editor.Write();
                                 status = "Code saved";
                                 break;
+                        }
+                    }
+                    break;
+                case "*":
+                case "/":
+                case "?":
+                    {
+                        bool forward = Command == "*" || Command == "/";
+
+                        if (Command == "*")
+                            Argument = editor.GetCode(editor.GetWordAt(editor.CaretPos));
+
+                        var searchTerm = Argument.TrimEnd('\n');
+                        var pos = editor.FindString(editor.CaretPos, searchTerm, forward);
+                        if ((bool)pos)
+                        {
+                            editor.CaretPos = pos;
+                            status = $"Found '{searchTerm}'";
+                        }
+                        else
+                        {
+                            status = $"'{searchTerm}' not found";
                         }
                     }
                     break;
@@ -758,6 +783,7 @@ namespace StationeersIC10Editor
         private VimCommand CurrentCommand = new VimCommand();
         private VimCommand LastCommand = new VimCommand();
         private VimCommand LastFindCommand = new VimCommand();
+        private VimCommand LastSearchCommand = new VimCommand();
 
         private TextRange LineRange(int line, uint count)
         {
@@ -775,6 +801,8 @@ namespace StationeersIC10Editor
                 CommandStatus = CurrentCommand.Execute(Editor);
                 if (CurrentCommand.IsFind)
                     LastFindCommand = CurrentCommand;
+                else if (CurrentCommand.IsSearch)
+                    LastSearchCommand = CurrentCommand;
                 else if (!CurrentCommand.IsMovement)
                     LastCommand = CurrentCommand;
                 CurrentCommand.Reset();
@@ -821,7 +849,7 @@ namespace StationeersIC10Editor
             if (Input.GetKeyDown(KeyCode.Return))
             {
                 L.Info("Enter key in Vim Normal mode, command before: " + CurrentCommand.ToString());
-                if (CurrentCommand.Command == ":")
+                if (CurrentCommand.IsLineCommand)
                     CurrentCommand.AddChar('\n');
                 else
                 {
@@ -854,6 +882,13 @@ namespace StationeersIC10Editor
                 {
                     if (LastFindCommand.IsComplete)
                         CommandStatus = LastFindCommand.Execute(Editor);
+                    continue;
+                }
+
+                if (c == 'n')
+                {
+                    if (LastSearchCommand.IsComplete)
+                        CommandStatus = LastSearchCommand.Execute(Editor);
                     continue;
                 }
 

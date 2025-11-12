@@ -190,6 +190,65 @@ namespace StationeersIC10Editor
             return FindNonWhitespace(pos, forward);
         }
 
+        public TextPosition FindString(TextPosition startPos, string searchTerm, bool forward = true)
+        {
+            if (forward)
+                return FindStringForward(startPos, searchTerm);
+            else
+                return FindStringBackward(startPos, searchTerm);
+        }
+
+        public TextPosition FindStringForward(TextPosition startPos, string searchTerm)
+        {
+            int lineIndex = startPos.Line;
+            int colIndex = startPos.Col + 1;
+
+            while (lineIndex < Lines.Count)
+            {
+                string line = Lines[lineIndex];
+                int foundIndex = line.IndexOf(searchTerm, colIndex, StringComparison.Ordinal);
+                if (foundIndex != -1)
+                    return new TextPosition(lineIndex, foundIndex);
+
+                lineIndex++;
+                colIndex = 0;
+            }
+
+            return new TextPosition(-1, -1);
+
+        }
+
+        private TextPosition FindStringBackward(TextPosition startPos, string searchTerm)
+        {
+            int lineIndex = startPos.Line;
+            int colIndex = startPos.Col - 1;
+
+            while (lineIndex >= 0)
+            {
+                string line = Lines[lineIndex];
+
+                if (colIndex >= line.Length) colIndex = line.Length - 1;
+                if (colIndex < 0)
+                {
+                    lineIndex--;
+                    if (lineIndex >= 0)
+                        colIndex = Lines[lineIndex].Length - 1;
+                    continue;
+                }
+
+                int foundIndex = line.LastIndexOf(searchTerm, colIndex, StringComparison.Ordinal);
+
+                if (foundIndex != -1)
+                    return new TextPosition(lineIndex, foundIndex);
+
+                lineIndex--;
+                if (lineIndex >= 0)
+                    colIndex = Lines[lineIndex].Length - 1;
+            }
+
+            return new TextPosition(-1, -1);
+        }
+
 
         public char this[TextPosition pos]
         {
