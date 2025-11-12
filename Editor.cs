@@ -1218,17 +1218,17 @@ namespace StationeersIC10Editor
                 "Home/End       Move caret to start/end of line\n" +
                 "Page Up/Down   Move caret up/down by 20 lines\n" +
                 "Shift+Arrow    Select text while moving caret\n" +
-                "Ctrl+Q         Quit\n" +
-                "Ctrl+S         Save\n" +
-                "Ctrl+E         Save + export code to ic chip + close\n" +
-                "Ctrl+Z         Undo\n" +
-                "Ctrl+Y         Redo\n" +
-                "Ctrl+C         Copy selected code\n" +
-                "Ctrl+V         Paste code from clipboard\n" +
-                "Ctrl+A         Select all code\n" +
-                "Ctrl+X         Cut selected code\n" +
-                "Ctrl+Arrow     Move caret by word\n" +
-                "Ctrl+Click     Open Stationpedia page of word at cursor\n\n"
+                "Ctrl + Q         Quit (no confirm, see note below)\n" +
+                "Ctrl + S         Save\n" +
+                "Ctrl + E         Save + export code to ic chip + close\n" +
+                "Ctrl + Z         Undo\n" +
+                "Ctrl + Y         Redo\n" +
+                "Ctrl + C         Copy selected code\n" +
+                "Ctrl + V         Paste code from clipboard\n" +
+                "Ctrl + A         Select all code\n" +
+                "Ctrl + X         Cut selected code\n" +
+                "Ctrl + Arrow     Move caret by word\n" +
+                "Ctrl + Click     Open Stationpedia page of word at cursor\n\n"
                 );
 
             ImGui.Separator();
@@ -1253,8 +1253,8 @@ namespace StationeersIC10Editor
                 "Other:\n" +
                 ". ; :w :wq :q\n\n" +
                 "Notes:\n" +
-                "gf opens Stationpedia page of hash/name at cursor\n\n" +
-                ".  is not working for commands that switch to insert mode\n\n"
+                "'gf' opens Stationpedia page of hash/name at cursor\n\n" +
+                "'.'  is not working for commands that switch to insert mode\n\n"
                 );
 
             ImGui.Separator();
