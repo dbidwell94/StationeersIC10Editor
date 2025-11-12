@@ -841,7 +841,8 @@ namespace StationeersIC10Editor
             var sBytes = $"{Code.Length,4}";
 
             uint lineColor = _colorDefault;
-            if (EnforceLineLimit) {
+            if (EnforceLineLimit)
+            {
                 sLines += "/128";
                 lineColor = Lines.Count < 120 ? _colorGood : (Lines.Count <= 128 ? _colorWarning : _colorBad);
             }
@@ -901,6 +902,7 @@ namespace StationeersIC10Editor
         public static bool PauseOnOpen => IC10EditorPlugin.PauseOnOpen.Value;
         public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
         public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
+        public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
 
 
         public bool LimitExceeded => (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
@@ -1015,6 +1017,14 @@ namespace StationeersIC10Editor
 
                     ImGui.NewLine();
                 }
+            }
+
+            if (EnableAutoComplete)
+            {
+                float charHeight = ImGui.GetTextLineHeightWithSpacing();
+                var completePos = _caretPixelPos + new Vector2(0, 1.5f * charHeight);
+
+                CodeFormatter.DrawAutocomplete(this, CaretPos, completePos);
             }
 
             clipper.End();
@@ -1207,6 +1217,7 @@ namespace StationeersIC10Editor
             DrawFloatOption("UI Scaling", IC10EditorPlugin.ScaleFactor, 0.25f, 5.0f);
             DrawFloatOption("Toolitp delay (ms)", IC10EditorPlugin.TooltipDelay);
             DrawBoolOption("VIM bindings", IC10EditorPlugin.VimBindings);
+            DrawBoolOption("Auto Completion (experimental, insert with Tab key)", IC10EditorPlugin.EnableAutoComplete);
             ImGui.Checkbox("Show debug window", ref _debugWindowVisible);
 
             ImGui.Separator();

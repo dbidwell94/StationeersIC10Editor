@@ -454,24 +454,149 @@ namespace StationeersIC10Editor
                 return result;
             }
 
-            public override bool DrawTooltip(string line, TextPosition caret, Vector2 pos)
+            private string _suggestion = null;
+
+            public override string GetAutocompleteSuggestion()
             {
+                return _suggestion;
+            }
+
+            public override void DrawAutocomplete(IC10Editor ed, TextPosition caret, Vector2 pos)
+            {
+                _suggestion = null;
+                if (!ed.IsWordEnd(caret) && caret.Col < Code[caret.Line].Length)
+                    return;
+
+                if (ed.KeyHandler.Mode != KeyMode.Insert)
+                    return;
+
+                caret.Col--;
+                var token = GetTokenAtPosition(caret, out int index);
+                if (token == null)
+                    return;
+
+                if (string.IsNullOrEmpty(token.Tooltip))
+                    return;
+
+                var line = Code[caret.Line];
+                if (!line[0].IsInstruction)
+                    return;
+
+                var opcode = IC10Utils.Instructions[line[0].Text];
+                var argType = opcode.ArgumentTypes[index - 1].Compat;
+
+                float charHeight = ImGui.GetTextLineHeightWithSpacing();
+                float charWidth = ImGui.CalcTextSize("M").x;
+
+                var suggestions = new List<string>();
+
+                foreach (var entry in IC10Utils.Types)
+                    if (!entry.Key.StartsWith("rr") && !entry.Key.StartsWith("dr"))
+                        if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text, StringComparison.OrdinalIgnoreCase))
+                            suggestions.Add(entry.Key);
+
+                foreach (var entry in types)
+                    if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text, StringComparison.OrdinalIgnoreCase))
+                        suggestions.Add(entry.Key);
+
+                var n = suggestions.Count;
+                if (n == 0)
+                    return;
+
+                _suggestion = "";
+
+                string commonPrefix = string.Empty;  // Start with an empty string, not null
+
+                foreach (var suggestion in suggestions)
+                {
+                    var rest = suggestion.Substring(token.Text.Length);
+                    if (string.IsNullOrEmpty(commonPrefix))
+                        commonPrefix = rest;
+                    else
+                    {
+                        int len = Math.Min(commonPrefix.Length, rest.Length);
+                        int i = 0;
+                        for (; i < len; i++)
+                            if (commonPrefix[i] != rest[i])
+                                break;
+
+                        commonPrefix = commonPrefix.Substring(0, i);
+                    }
+
+                    if (string.IsNullOrEmpty(commonPrefix))
+                        break;
+                }
+
+                if (string.IsNullOrEmpty(commonPrefix) == false)
+                    _suggestion = commonPrefix;
+
+                var width = 0.0f;
+                const int maxSuggestions = 20;
+                if (n > maxSuggestions)
+                {
+                    suggestions = suggestions.GetRange(0, maxSuggestions);
+                    width = ImGui.CalcTextSize($"... and {n - maxSuggestions} more").x;
+                }
+
+                foreach (var suggestion in suggestions)
+                    width = Math.Max(ImGui.CalcTextSize(suggestion).x, width);
+
+                var completeSize = new Vector2(10.0f + width, 5.0f + charHeight * (suggestions.Count + (n > maxSuggestions ? 1 : 0)));
+
+                var list = ImGui.GetWindowDrawList();
+                list.AddRectFilled(
+                    pos,
+                    pos + completeSize,
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.9f)),
+                    5.0f);
+
+                pos.x += 5.0f;
+                foreach (var suggestion in suggestions)
+                {
+                    list.AddText(
+                        pos,
+                        ICodeFormatter.ColorDefault,
+                        suggestion);
+                    pos.y += charHeight;
+                }
+
+                if (n > maxSuggestions)
+                {
+                    list.AddText(
+                        pos,
+                        ICodeFormatter.ColorDefault,
+                        $"... and {n - maxSuggestions} more");
+                }
+            }
+
+            public IC10Token GetTokenAtPosition(TextPosition caret, out int tokenIndex)
+            {
+                tokenIndex = -1;
                 if (caret.Line < 0 || caret.Line >= Code.Count)
-                    return false;
+                    return null;
 
                 var codeLine = Code[caret.Line];
                 IC10Token tokenAtCaret = null;
-                foreach (var token in codeLine)
+                for (int i = 0; i < codeLine.Count; i++)
                 {
+                    var token = codeLine[i];
                     if (caret.Col < token.Column)
                         break;
 
                     if (caret.Col >= token.Column && caret.Col < token.Column + token.Text.Length)
                     {
                         tokenAtCaret = token;
+                        tokenIndex = i;
                         break;
                     }
                 }
+
+                return tokenAtCaret;
+            }
+
+            public override bool DrawTooltip(string line, TextPosition caret, Vector2 pos)
+            {
+                var tokenAtCaret = GetTokenAtPosition(caret, out int index);
 
                 if (tokenAtCaret == null || !tokenAtCaret.IsInstruction && string.IsNullOrEmpty(tokenAtCaret.Tooltip))
                     return false;

@@ -304,12 +304,12 @@ namespace StationeersIC10Editor
 
             public DataType ToDataType()
             {
-              foreach (DataType dt in Enum.GetValues(typeof(DataType)))
-              {
-                  if ((Value & (uint)dt) != 0)
-                      return dt;
-              }
-              return DataType.Unknown;
+                foreach (DataType dt in Enum.GetValues(typeof(DataType)))
+                {
+                    if ((Value & (uint)dt) != 0)
+                        return dt;
+                }
+                return DataType.Unknown;
             }
 
             public string Description
@@ -344,19 +344,22 @@ namespace StationeersIC10Editor
 
             }
 
-            public ArgType Compat {
-              get {
-                ArgType at = new ArgType();
-                at.Value = this.Value;
-                if (Has(DataType.Number)) {
-                  at.Add(DataType.Label, DataType.Register, DataType.LogicType, DataType.LogicSlotType, DataType.BatchMode);
-                  at.Add(DataType.Color);
+            public ArgType Compat
+            {
+                get
+                {
+                    ArgType at = new ArgType();
+                    at.Value = this.Value;
+                    if (Has(DataType.Number))
+                    {
+                        at.Add(DataType.Label, DataType.Register, DataType.LogicType, DataType.LogicSlotType, DataType.BatchMode);
+                        at.Add(DataType.Color);
+                    }
+                    if (Has(DataType.Label)) at.Add(DataType.Number, DataType.Register);
+                    if (Has(DataType.DeviceId)) at.Add(DataType.Number, DataType.Register);
+                    if (Has(DataType.BatchMode)) at.Add(DataType.Number);
+                    return at;
                 }
-                if (Has(DataType.Label)) at.Add(DataType.Number, DataType.Register);
-                if (Has(DataType.DeviceId)) at.Add(DataType.Number, DataType.Register);
-                if (Has(DataType.BatchMode)) at.Add(DataType.Number);
-                return at;
-              }
             }
         }
 
@@ -608,12 +611,13 @@ namespace StationeersIC10Editor
                         }
                     }
                 }
-                else {
-                  if(NumCodeTokens > 0 && !IsLabel && !IsAlias && !IsDefine && !this[0].IsComment)
-                  {
-                      this[0].Color = ICodeFormatter.ColorError;
-                      this[0].Tooltip += $"Error: unknown instruction '{this[0].Text}'\n";
-                  }
+                else
+                {
+                    if (NumCodeTokens > 0 && !IsLabel && !IsAlias && !IsDefine && !this[0].IsComment)
+                    {
+                        this[0].Color = ICodeFormatter.ColorError;
+                        this[0].Tooltip += $"Error: unknown instruction '{this[0].Text}'\n";
+                    }
                 }
             }
         }

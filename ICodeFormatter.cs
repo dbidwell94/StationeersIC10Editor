@@ -33,6 +33,8 @@ namespace StationeersIC10Editor
         public abstract void InsertLine(int index, string line);
         public abstract void AppendLine(string line);
         public abstract bool DrawTooltip(string line, TextPosition caret, Vector2 pos);
+        public abstract void DrawAutocomplete(IC10Editor ed, TextPosition caret, Vector2 pos);
+        public abstract string GetAutocompleteSuggestion();
 
         public static uint ColorFromHTML(string htmlColor)
         {

@@ -48,6 +48,7 @@ namespace StationeersIC10Editor
         public static ConfigEntry<bool> VimBindings;
         public static ConfigEntry<bool> EnforceLineLimit;
         public static ConfigEntry<bool> EnforceByteLimit;
+        public static ConfigEntry<bool> EnableAutoComplete;
         public static ConfigEntry<float> ScaleFactor;
         public static ConfigEntry<float> TooltipDelay;
 
@@ -59,6 +60,7 @@ namespace StationeersIC10Editor
             PauseOnOpen = Config.Bind("General", "Pause game when IC10 editor is open", true, "Pause the game when the IC10 editor window is open");
             ScaleFactor = Config.Bind("General", "UI Scale Factor", 1.0f, "Scale factor for the IC10 editor UI");
             TooltipDelay = Config.Bind("General", "Tooltip Delay", 100f, "Delay in seconds before tooltips are shown");
+            EnableAutoComplete = Config.Bind("General", "Autocomplete", false, "Enable autocompletion/suggestions (experimental, trigger with Tab key)");
         }
 
         private void Awake()
