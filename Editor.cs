@@ -823,28 +823,44 @@ namespace StationeersIC10Editor
             ImGui.PopStyleVar();
         }
 
+        private static uint _colorGood = ICodeFormatter.ColorFromHTML("green");
+        private static uint _colorWarning = ICodeFormatter.ColorFromHTML("orange");
+        private static uint _colorBad = ICodeFormatter.ColorFromHTML("red");
+        private static uint _colorDefault = ICodeFormatter.ColorFromHTML("white");
+
         public void DrawFooter()
         {
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
-            ImGui.Text($"{CaretLine}/{CaretCol} ");
+            ImGui.Text($"{CaretLine,3}/{CaretCol,2},");
             ImGui.SameLine();
 
             var pos = ImGui.GetCursorScreenPos();
             var charWidth = ImGui.CalcTextSize("M").x;
 
-            var sLines = $"{Lines.Count}/128 lines ";
-            var sBytes = $"{Code.Length}/4096 bytes";
-            uint colorGood = ICodeFormatter.ColorFromHTML("green");
-            uint colorWarning = ICodeFormatter.ColorFromHTML("orange");
-            uint colorBad = ICodeFormatter.ColorFromHTML("red");
+            var sLines = $"{Lines.Count,3}";
+            var sBytes = $"{Code.Length,4}";
 
-            uint lineColor = Lines.Count < 120 ? colorGood : (Lines.Count <= 128 ? colorWarning : colorBad);
-            uint byteColor = Code.Length < 4000 ? colorGood : (Code.Length <= 4096 ? colorWarning : colorBad);
+            uint lineColor = _colorDefault;
+            if (EnforceLineLimit) {
+                sLines += "/128";
+                lineColor = Lines.Count < 120 ? _colorGood : (Lines.Count <= 128 ? _colorWarning : _colorBad);
+            }
+
+            uint byteColor = _colorDefault;
+            if (EnforceByteLimit)
+            {
+                sBytes += "/4096";
+                byteColor = Code.Length < 4000 ? _colorGood : (Code.Length <= 4096 ? _colorWarning : _colorBad);
+            }
 
             var drawList = ImGui.GetWindowDrawList();
             drawList.AddText(pos, lineColor, sLines);
             pos.x += sLines.Length * charWidth;
+            drawList.AddText(pos, _colorDefault, " lines,");
+            pos.x += 8 * charWidth;
             drawList.AddText(pos, byteColor, sBytes);
+            pos.x += sBytes.Length * charWidth;
+            drawList.AddText(pos, _colorDefault, " bytes");
 
             ImGui.SameLine();
 
@@ -854,9 +870,7 @@ namespace StationeersIC10Editor
 
             ImGui.SameLine();
 
-            bool exportDisabled = (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
-
-            if (exportDisabled)
+            if (LimitExceeded)
             {
                 ImGui.PushItemFlag(ImGuiItemFlags.Disabled, true);
                 ImGui.PushStyleColor(ImGuiCol.Button, ICodeFormatter.ColorFromHTML("gray"));
@@ -869,7 +883,7 @@ namespace StationeersIC10Editor
             if (ImGui.Button("Confirm", buttonSize))
                 Confirm();
 
-            if (exportDisabled)
+            if (LimitExceeded)
             {
                 ImGui.PopItemFlag();
                 ImGui.PopStyleColor();
@@ -888,20 +902,40 @@ namespace StationeersIC10Editor
         public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
         public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
 
+
+        public bool LimitExceeded => (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
+
+        private const string _limitExceededMessage = "Size limit exceeded: cannot save or export.";
+
         public void Write()
         {
+            if (LimitExceeded)
+            {
+                KeyHandler.CommandStatus = _limitExceededMessage;
+                return;
+            }
             KeyHandler.CommandStatus = "Saved";
             _pcm.InputFinished(Code);
         }
 
         public void Confirm()
         {
+            if (LimitExceeded)
+            {
+                KeyHandler.CommandStatus = _limitExceededMessage;
+                return;
+            }
             Write();
             HideWindow();
         }
 
         public void Export()
         {
+            if (LimitExceeded)
+            {
+                KeyHandler.CommandStatus = _limitExceededMessage;
+                return;
+            }
             Confirm();
             _pcm.Export();
         }
