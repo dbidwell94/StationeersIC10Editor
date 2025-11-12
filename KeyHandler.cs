@@ -226,7 +226,7 @@ namespace StationeersIC10Editor
             else
                 range = CaretAfterMove(editor);
 
-            var status = "";
+            string status = null;
             var nLines = range.End.Line - range.Start.Line + 1;
             if (range.Start.Col > 0 || range.End.Col <= editor.Lines[range.End.Line].Length)
                 nLines = 0;
@@ -393,12 +393,11 @@ namespace StationeersIC10Editor
                             case 'q':
                                 L.Info("Vim command :q - exiting editor");
                                 editor.HideWindow();
-                                status = "Exited editor";
                                 break;
                             case 'w':
                                 L.Info("Vim command :w - writing editor");
                                 editor.Write();
-                                status = "Saved file";
+                                status = "Code saved";
                                 break;
                         }
                     }
@@ -486,10 +485,10 @@ namespace StationeersIC10Editor
                         ImGui.Text($"{CurrentCommand}");
                         ImGui.SameLine();
                     }
-                    ImGui.Text($"{CommandStatus}");
-                    ImGui.SameLine();
                 }
             }
+            ImGui.Text($"{CommandStatus}");
+            ImGui.SameLine();
         }
 
         public void OpenStationPedia(TextPosition pos)
@@ -569,7 +568,10 @@ namespace StationeersIC10Editor
             {
                 // these combos are not captured by ImGui for some reason, so handle them via Unity Input
                 if (Input.GetKeyDown(KeyCode.S))
+                {
                     Editor.Write();
+                    CommandStatus = "Code saved";
+                }
                 if (Input.GetKeyDown(KeyCode.E))
                     Editor.Export();
                 if (Input.GetKeyDown(KeyCode.Q))
@@ -834,7 +836,6 @@ namespace StationeersIC10Editor
 
             for (int iChar = 0; iChar < io.InputQueueCharacters.Size; iChar++)
             {
-                CommandStatus = "";
                 char c = (char)io.InputQueueCharacters[iChar];
 
                 if (ctrlDown)

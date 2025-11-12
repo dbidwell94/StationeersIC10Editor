@@ -246,6 +246,7 @@ namespace StationeersIC10Editor
         public IC10Editor(ProgrammableChipMotherboard pcm)
         {
             CodeFormatter = new IC10.IC10CodeFormatter();
+            KeyHandler = new KeyHandler(this);
             UndoList = new LinkedList<EditorState>();
             RedoList = new LinkedList<EditorState>();
             Lines = new List<string>();
@@ -253,7 +254,6 @@ namespace StationeersIC10Editor
             CaretPos = new TextPosition(0, 0);
             CodeFormatter.AppendLine("");
             _pcm = pcm;
-            KeyHandler = new KeyHandler(this);
 
             KeyHandler.OnKeyPressed = (key) =>
             {
@@ -426,6 +426,7 @@ namespace StationeersIC10Editor
             get { return _caretPos; }
             set
             {
+                KeyHandler.CommandStatus = "";
                 _caretPos = value;
                 if (_caretPos.Line < 0)
                     _caretPos.Line = 0;
@@ -916,7 +917,7 @@ namespace StationeersIC10Editor
                 KeyHandler.CommandStatus = _limitExceededMessage;
                 return;
             }
-            KeyHandler.CommandStatus = "Saved";
+            KeyHandler.CommandStatus = "Saved file";
             _pcm.InputFinished(Code);
         }
 
