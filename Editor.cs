@@ -1,15 +1,20 @@
 namespace StationeersIC10Editor
 {
-    using System;
-    using System.Linq;
-    using System.Collections.Generic;
-    using Assets.Scripts;
+    using Assets.Scripts.Networking.Transports;
+    using Assets.Scripts.Networking;
     using Assets.Scripts.Objects.Motherboards;
-    using BepInEx.Configuration;
     using Assets.Scripts.UI;
+    using Assets.Scripts;
+    using BepInEx.Configuration;
+    using Cysharp.Threading.Tasks;
     using ImGuiNET;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System;
     using UnityEngine;
 
+    using static Utils;
+    using static Settings;
 
     public class EditorState
     {
@@ -45,14 +50,200 @@ namespace StationeersIC10Editor
         }
     }
 
-    public class IC10Editor
+    public static class Utils
     {
-        public KeyHandler KeyHandler;
-
         public static bool IsWordChar(char c)
         {
             return char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '-';
         }
+
+
+    }
+
+    public static class Settings
+    {
+        public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
+        public static bool EnforceLineLimit => IC10EditorPlugin.EnforceLineLimit.Value;
+        public static bool EnforceByteLimit => IC10EditorPlugin.EnforceByteLimit.Value;
+        public static bool PauseOnOpen => IC10EditorPlugin.PauseOnOpen.Value;
+        public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
+        public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
+        public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
+
+        public static Vector2 buttonSize => Scale * new Vector2(85, 0);
+        public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);
+
+        public const string LimitExceededMessage = "Size limit exceeded: cannot save or export.";
+    }
+
+    public class IEditor
+    {
+        public object Target;
+        public string Title = "Motherboard";
+        public ProgrammableChipMotherboard PCM => Target as ProgrammableChipMotherboard;
+        public InstructionData InstructionData => Target as InstructionData;
+        public bool LimitExceeded => (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
+
+        public bool HaveSelection => (bool)Selection;
+        public KeyHandler KeyHandler;
+
+        public TextPosition _caretPos;
+
+        public int ScrollToCaret = 0;
+        protected double _timeLastAction = 0.0;
+
+        public double TimeLastAction => _timeLastAction;
+        public KeyMode KeyMode => KeyHandler.Mode;
+
+        public LinkedList<EditorState> UndoList;
+        public LinkedList<EditorState> RedoList;
+        public ICodeFormatter CodeFormatter;
+        public List<string> Lines;
+        public string Code => string.Join("\n", Lines);
+        public string CommandStatus = "";
+
+        public IEditor(KeyHandler keyHandler, object target = null)
+        {
+            Target = target;
+            KeyHandler = keyHandler;
+            CodeFormatter = CodeFormatters.GetFormatter("IC10");
+            UndoList = new LinkedList<EditorState>();
+            RedoList = new LinkedList<EditorState>();
+            Lines = new List<string>();
+            Lines.Add("");
+            CaretPos = new TextPosition(0, 0);
+            CodeFormatter.AppendLine("");
+        }
+
+        public TextPosition CaretPos
+        {
+            get { return _caretPos; }
+            set
+            {
+                _caretPos = value;
+                if (_caretPos.Line < 0)
+                    _caretPos.Line = 0;
+                if (_caretPos.Line >= Lines.Count)
+                    _caretPos.Line = Lines.Count - 1;
+                if (_caretPos.Col < 0)
+                    _caretPos.Col = 0;
+                if (_caretPos.Col > Lines[_caretPos.Line].Length)
+                    _caretPos.Col = Lines[_caretPos.Line].Length;
+                ScrollToCaret += 1;
+                _timeLastAction = ImGui.GetTime();
+            }
+        }
+
+        public int CaretLine
+        {
+            get { return _caretPos.Line; }
+            set { CaretPos = new TextPosition(value, _caretPos.Col); }
+        }
+
+        public int CaretCol
+        {
+            get { return CaretPos.Col; }
+            set { CaretPos = new TextPosition(_caretPos.Line, value); }
+        }
+
+        public TextRange Selection;
+
+        public string CurrentLine
+        {
+            get
+            {
+                return Lines[CaretLine];
+            }
+
+            set
+            {
+                if (value == Lines[CaretLine])
+                    return;
+
+                ReplaceLine(CaretLine, value);
+            }
+        }
+        public EditorState State
+        {
+            get
+            {
+                return new EditorState { Code = Code, CaretPos = CaretPos, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+            }
+
+            set
+            {
+                ResetCode(value.Code, false);
+                CaretPos = value.CaretPos;
+            }
+        }
+
+        public void PushUndoState(bool merge = true)
+        {
+            while (UndoList.Count > 100)
+                UndoList.RemoveLast();
+
+            var state = State;
+            state.Mergeable = merge;
+
+            if (string.IsNullOrEmpty(state.Code))
+                return;
+
+            if (UndoList.Count > 0)
+            {
+                var first = UndoList.First.Value;
+                if (state.Code == first.Code)
+                {
+                    first.CaretPos = state.CaretPos;
+                    return;
+                }
+
+                // merge with previous state if within 500ms or same code
+                // merging does not happen accross "large" changes (e.g. paste, cut, delete selection etc.)
+                if (merge && first.Mergeable && state.Timestamp < first.Timestamp + 500)
+                    UndoList.RemoveFirst();
+            }
+
+            UndoList.AddFirst(state);
+        }
+
+        public void Undo()
+        {
+            if (UndoList.Count > 0)
+            {
+                RedoList.AddFirst(State);
+                State = UndoList.First.Value;
+                UndoList.RemoveFirst();
+            }
+        }
+
+        public void Redo()
+        {
+            if (RedoList.Count > 0)
+            {
+                UndoList.AddFirst(State);
+                State = RedoList.First.Value;
+                RedoList.RemoveFirst();
+            }
+        }
+
+        public void RemoveLine(int lineIndex)
+        {
+            if (lineIndex < 0 || lineIndex >= Lines.Count)
+                return;
+
+            CodeFormatter.RemoveLine(lineIndex);
+            Lines.RemoveAt(lineIndex);
+        }
+
+        public void ReplaceLine(int lineIndex, string newLine)
+        {
+            if (lineIndex < 0 || lineIndex >= Lines.Count)
+                return;
+
+            CodeFormatter.ReplaceLine(lineIndex, newLine);
+            Lines[lineIndex] = newLine;
+        }
+
 
         public bool IsWordBeginning(TextPosition pos)
         {
@@ -261,259 +452,6 @@ namespace StationeersIC10Editor
             }
         }
 
-        public TextPosition Move(TextPosition startPos, MoveAction action)
-        {
-            if (action.Amount == 0)
-                return startPos;
-
-            if (action.Token == MoveToken.Char)
-                return MoveChars(startPos, action.SignedAmount);
-
-            if (action.Token == MoveToken.Line)
-            {
-                var newLine = startPos.Line + action.SignedAmount;
-                if (newLine < 0)
-                    newLine = 0;
-                if (newLine >= Lines.Count)
-                    newLine = Lines.Count - 1;
-                return new TextPosition(newLine, startPos.Col);
-            }
-
-            if (action.Token == MoveToken.WordBeginning)
-            {
-                var pos = startPos;
-                for (int i = 0; i < action.Amount; i++)
-                    pos = FindWordBeginning(pos, action.Forward);
-                return pos;
-            }
-            if (action.Token == MoveToken.WordEnd)
-            {
-                var pos = startPos;
-                for (int i = 0; i < action.Amount; i++)
-                    pos = FindWordEnd(pos, action.Forward);
-                return pos;
-            }
-
-            throw new NotImplementedException($"Move not implemented for token {action.Token}");
-        }
-
-        public static bool UseNativeEditor = false;
-
-        private ProgrammableChipMotherboard _pcm;
-        private string Title = "IC10 Editor";
-
-        public IC10Editor(ProgrammableChipMotherboard pcm)
-        {
-            CodeFormatter = new IC10.IC10CodeFormatter();
-            KeyHandler = new KeyHandler(this);
-            UndoList = new LinkedList<EditorState>();
-            RedoList = new LinkedList<EditorState>();
-            Lines = new List<string>();
-            Lines.Add("");
-            CaretPos = new TextPosition(0, 0);
-            CodeFormatter.AppendLine("");
-            _pcm = pcm;
-
-            KeyHandler.OnKeyPressed = (key) =>
-            {
-                _keyLog.Enqueue(key);
-                while (_keyLog.Count > 20)
-                    _keyLog.Dequeue();
-            };
-        }
-
-        public ICodeFormatter CodeFormatter;
-
-        public List<string> Lines;
-
-        public string Code => string.Join("\n", Lines);
-
-        public EditorState State
-        {
-            get
-            {
-                return new EditorState { Code = Code, CaretPos = CaretPos, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
-            }
-
-            set
-            {
-                ResetCode(value.Code, false);
-                CaretPos = value.CaretPos;
-            }
-        }
-
-        public LinkedList<EditorState> UndoList;
-        public LinkedList<EditorState> RedoList;
-        public int ScrollToCaret = 0;
-
-        public void PushUndoState(bool merge = true)
-        {
-            while (UndoList.Count > 100)
-                UndoList.RemoveLast();
-
-            var state = State;
-            state.Mergeable = merge;
-
-            if (string.IsNullOrEmpty(state.Code))
-                return;
-
-            if (UndoList.Count > 0)
-            {
-                var first = UndoList.First.Value;
-                if (state.Code == first.Code)
-                {
-                    first.CaretPos = state.CaretPos;
-                    return;
-                }
-
-                // merge with previous state if within 500ms or same code
-                // merging does not happen accross "large" changes (e.g. paste, cut, delete selection etc.)
-                if (merge && first.Mergeable && state.Timestamp < first.Timestamp + 500)
-                    UndoList.RemoveFirst();
-            }
-
-            UndoList.AddFirst(state);
-        }
-
-        public void Undo()
-        {
-            if (UndoList.Count > 0)
-            {
-                RedoList.AddFirst(State);
-                State = UndoList.First.Value;
-                UndoList.RemoveFirst();
-            }
-        }
-
-        public void Redo()
-        {
-            if (RedoList.Count > 0)
-            {
-                UndoList.AddFirst(State);
-                State = RedoList.First.Value;
-                RedoList.RemoveFirst();
-            }
-        }
-
-        public void RemoveLine(int lineIndex)
-        {
-            if (lineIndex < 0 || lineIndex >= Lines.Count)
-                return;
-
-            CodeFormatter.RemoveLine(lineIndex);
-            Lines.RemoveAt(lineIndex);
-        }
-
-        public void ReplaceLine(int lineIndex, string newLine)
-        {
-            if (lineIndex < 0 || lineIndex >= Lines.Count)
-                return;
-
-            CodeFormatter.ReplaceLine(lineIndex, newLine);
-            Lines[lineIndex] = newLine;
-        }
-
-        public string CurrentLine
-        {
-            get
-            {
-                return Lines[CaretLine];
-            }
-
-            set
-            {
-                if (value == Lines[CaretLine])
-                    return;
-
-                ReplaceLine(CaretLine, value);
-            }
-        }
-
-        private bool Show = false;
-        private double _timeLastAction = 0.0;
-
-        public void SwitchToNativeEditor()
-        {
-            UseNativeEditor = true;
-            Show = false;
-
-            // localPosition was set to -10000,-10000,0 to hide the native editor, so set it back to 0,0,0 to show it
-            InputSourceCode.Instance.Window.localPosition = new Vector3(0, 0, 0);
-            KeyManager.RemoveInputState("ic10editorinputstate");
-            InputSourceCode.Paste(Code);
-        }
-
-        public void HideWindow()
-        {
-            if (Show == false)
-                return;
-
-            Show = false;
-            KeyManager.RemoveInputState("ic10editorinputstate");
-            if (InputWindow.InputState == InputPanelState.Waiting)
-                InputWindow.CancelInput();
-            if (WorldManager.IsGamePaused)
-                InputSourceCode.Instance.PauseGameToggle(false);
-            InputSourceCode.Instance.ButtonInputCancel();
-
-            // This fixes following behavior:
-            // 1. Open IC10 editor while alt key is pressed (e.g. laptop)
-            // 2. Close IC10 editor with cancel button
-            // -> Right click action on any tool not working until alt key is pressed again
-            InputMouse.SetMouseControl(false);
-        }
-
-        public void ShowWindow()
-        {
-            Show = true;
-            KeyManager.SetInputState("ic10editorinputstate", KeyInputState.Typing);
-
-            if (VimEnabled)
-                KeyHandler.Mode = KeyMode.VimNormal;
-
-            if (!WorldManager.IsGamePaused && PauseOnOpen)
-                InputSourceCode.Instance.PauseGameToggle(true);
-
-            InputSourceCode.Instance.RectTransform.localPosition = new Vector3(-10000, -10000, 0);
-        }
-
-        public bool IsInitialized = false;
-        public TextPosition _caretPos;
-
-        public TextPosition CaretPos
-        {
-            get { return _caretPos; }
-            set
-            {
-                KeyHandler.CommandStatus = "";
-                _caretPos = value;
-                if (_caretPos.Line < 0)
-                    _caretPos.Line = 0;
-                if (_caretPos.Line >= Lines.Count)
-                    _caretPos.Line = Lines.Count - 1;
-                if (_caretPos.Col < 0)
-                    _caretPos.Col = 0;
-                if (_caretPos.Col > Lines[_caretPos.Line].Length)
-                    _caretPos.Col = Lines[_caretPos.Line].Length;
-                ScrollToCaret += 1;
-                _timeLastAction = ImGui.GetTime();
-            }
-        }
-
-        public int CaretLine
-        {
-            get { return _caretPos.Line; }
-            set { CaretPos = new TextPosition(value, _caretPos.Col); }
-        }
-
-        public int CaretCol
-        {
-            get { return CaretPos.Col; }
-            set { CaretPos = new TextPosition(_caretPos.Line, value); }
-        }
-
-        public TextRange Selection;
-
         public void CaretToEndOfLine()
         {
             CaretCol = Lines[CaretLine].Length;
@@ -602,7 +540,6 @@ namespace StationeersIC10Editor
 
         public void CopyRange(TextRange range)
         {
-            KeyHandler.OnKeyPressed($"copy range {range}");
             string code = GetCode(range);
             if (code != null)
             {
@@ -621,59 +558,6 @@ namespace StationeersIC10Editor
                 PushUndoState(false);
             Insert(GameManager.Clipboard);
         }
-
-        public void SetTitle(string title)
-        {
-            Title = title;
-        }
-
-        public void ClearCode(bool pushUndo = true)
-        {
-            if (pushUndo)
-                PushUndoState(false);
-            Lines.Clear();
-            Lines.Add(string.Empty);
-            CodeFormatter.ResetCode(string.Empty);
-            CaretLine = 0;
-            CaretCol = 0;
-            Selection.Reset();
-        }
-
-        public void Insert(string code)
-        {
-            code = code.Replace("\r", string.Empty);
-            if (string.IsNullOrEmpty(code))
-                return;
-            var newLines = new List<string>(code.Split('\n'));
-            if (newLines.Count == 0)
-                return;
-
-            // CodeFormatter.RemoveLine(CaretLine);
-            string beforeCaret = CurrentLine.Substring(0, CaretCol);
-            string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
-            L.Info($"Inserting code at {CaretLine},{CaretCol}: '{beforeCaret}|{afterCaret}'");
-            L.Info($"{newLines.Count} new lines: {newLines}");
-            L.Info($"starts with newline {code.StartsWith("\n")}, ends with newline {code.EndsWith("\n")}");
-            if (newLines.Count == 1)
-            {
-                CurrentLine = beforeCaret + newLines[0] + afterCaret;
-                CaretCol = beforeCaret.Length + newLines[0].Length;
-                return;
-            }
-            CurrentLine = beforeCaret + newLines[0];
-            newLines.RemoveAt(0);
-            int newCaretCol = newLines[newLines.Count - 1].Length;
-            newLines[newLines.Count - 1] += afterCaret;
-            Lines.InsertRange(CaretLine + 1, newLines);
-            for (var j = 0; j < newLines.Count; j++)
-                CodeFormatter.InsertLine(CaretLine + 1 + j, newLines[j]);
-
-            CaretPos = new TextPosition(
-                CaretLine + newLines.Count,
-                newCaretCol);
-        }
-
-        public bool HaveSelection => (bool)Selection;
 
         public string GetCode(TextRange range)
         {
@@ -741,7 +625,6 @@ namespace StationeersIC10Editor
 
             var start = range.Start;
             var end = range.End;
-            KeyHandler.OnKeyPressed($"removeLast: {removeLast}");
 
             if (start.Line == end.Line)
             {
@@ -800,13 +683,453 @@ namespace StationeersIC10Editor
             return new TextRange(startPos, endPos);
         }
 
+        public void ClearCode(bool pushUndo = true)
+        {
+            if (pushUndo)
+                PushUndoState(false);
+            Lines.Clear();
+            Lines.Add(string.Empty);
+            CodeFormatter.ResetCode(string.Empty);
+            CaretLine = 0;
+            CaretCol = 0;
+            Selection.Reset();
+        }
+
+        public void Insert(string code)
+        {
+            code = code.Replace("\r", string.Empty);
+            if (string.IsNullOrEmpty(code))
+                return;
+            var newLines = new List<string>(code.Split('\n'));
+            if (newLines.Count == 0)
+                return;
+
+            // CodeFormatter.RemoveLine(CaretLine);
+            string beforeCaret = CurrentLine.Substring(0, CaretCol);
+            string afterCaret = CurrentLine.Substring(CaretCol, CurrentLine.Length - CaretCol);
+            L.Info($"Inserting code at {CaretLine},{CaretCol}: '{beforeCaret}|{afterCaret}'");
+            L.Info($"{newLines.Count} new lines: {newLines}");
+            L.Info($"starts with newline {code.StartsWith("\n")}, ends with newline {code.EndsWith("\n")}");
+            if (newLines.Count == 1)
+            {
+                CurrentLine = beforeCaret + newLines[0] + afterCaret;
+                CaretCol = beforeCaret.Length + newLines[0].Length;
+                return;
+            }
+            CurrentLine = beforeCaret + newLines[0];
+            newLines.RemoveAt(0);
+            int newCaretCol = newLines[newLines.Count - 1].Length;
+            newLines[newLines.Count - 1] += afterCaret;
+            Lines.InsertRange(CaretLine + 1, newLines);
+            for (var j = 0; j < newLines.Count; j++)
+                CodeFormatter.InsertLine(CaretLine + 1 + j, newLines[j]);
+
+            CaretPos = new TextPosition(
+                CaretLine + newLines.Count,
+                newCaretCol);
+        }
+
+        public TextPosition Move(TextPosition startPos, MoveAction action)
+        {
+            if (action.Amount == 0)
+                return startPos;
+
+            if (action.Token == MoveToken.Char)
+                return MoveChars(startPos, action.SignedAmount);
+
+            if (action.Token == MoveToken.Line)
+            {
+                var newLine = startPos.Line + action.SignedAmount;
+                if (newLine < 0)
+                    newLine = 0;
+                if (newLine >= Lines.Count)
+                    newLine = Lines.Count - 1;
+                return new TextPosition(newLine, startPos.Col);
+            }
+
+            if (action.Token == MoveToken.WordBeginning)
+            {
+                var pos = startPos;
+                for (int i = 0; i < action.Amount; i++)
+                    pos = FindWordBeginning(pos, action.Forward);
+                return pos;
+            }
+            if (action.Token == MoveToken.WordEnd)
+            {
+                var pos = startPos;
+                for (int i = 0; i < action.Amount; i++)
+                    pos = FindWordEnd(pos, action.Forward);
+                return pos;
+            }
+
+            throw new NotImplementedException($"Move not implemented for token {action.Token}");
+        }
+
+        public void ResetCode(string code, bool pushUndo = true)
+        {
+            code = code.Replace("\r", string.Empty);
+            ClearCode(pushUndo);
+            Lines.Clear();
+            var lines = code.Split('\n');
+            CodeFormatter.ResetCode(code);
+            foreach (var line in lines)
+                Lines.Add(line);
+            CaretPos = new TextPosition(0, 0);
+            if (pushUndo)
+                PushUndoState(false);
+        }
+
+        public string Save()
+        {
+            if (PCM)
+            {
+                if (LimitExceeded)
+                {
+                    CommandStatus = LimitExceededMessage;
+                    return "Cannot save file, limits exceeded.";
+                }
+                PCM.InputFinished(Code);
+                return "Saved file";
+            }
+            if (InstructionData != null)
+            {
+                InstructionData.Instructions = Code;
+                InstructionData.SaveToFile(InstructionData.DirectoryPath);
+                return $"Saved to Library {InstructionData.Title}";
+            }
+            return "Error: No target to save to.";
+        }
+    }
+
+    public class EditorWindow
+    {
+
+        IEditor Editor;
+        public KeyMode KeyMode;
+        public static bool UseNativeEditor = false;
+        KeyHandler KeyHandler;
+
+        public List<IEditor> Tabs = new List<IEditor>();
+
+        private int _activeTabIndex = 0;
+        public IEditor ActiveTab => Tabs[_activeTabIndex];
+        public IEditor MotherboardTab => Tabs[0];
+
+        public List<string> Lines => ActiveTab.Lines;
+        public string Code => ActiveTab.Code;
+        public int CaretLine => ActiveTab.CaretLine;
+        public int CaretCol => ActiveTab.CaretCol;
+        public TextPosition CaretPos => ActiveTab.CaretPos;
+
+        public ICodeFormatter CodeFormatter => ActiveTab.CodeFormatter;
+        public TextRange Selection => ActiveTab.Selection;
+
+        bool LimitExceeded => ActiveTab.LimitExceeded;
+        string CommandStatus => ActiveTab.CommandStatus;
+
+        private string Title = "IC10 Editor";
+
+        public EditorWindow(ProgrammableChipMotherboard pcm)
+        {
+            KeyHandler = new KeyHandler(this);
+            Editor = new IEditor(KeyHandler, pcm);
+
+            Tabs.Add(Editor);
+        }
+
+        private bool Show = false;
+
+        private Dictionary<string, InstructionData> _libraryCodes = new Dictionary<string, InstructionData>();
+        private List<InstructionData> _librarySearchResults = new List<InstructionData>();
+
+        private bool _librarySearchVisible = false;
+        private string _librarySearchText = "";
+
+
+        private bool _librarySearchJustOpened = false;
+        private int _librarySelectedIndex = -1;
+
+        public async UniTaskVoid LoadLibraries()
+        {
+
+            var items = await NetworkManager.GetLocalAndWorkshopItems(SteamTransport.WorkshopType.ICCode);
+
+            var libs = new Dictionary<string, InstructionData>();
+
+            foreach (var item in items)
+            {
+                InstructionData data = InstructionData.GetFromFile(item.FilePathFullName);
+                data.ItemWrapper = item;
+                libs.Add(data.Title, data);
+            }
+
+            await UniTask.SwitchToMainThread();
+            _libraryCodes = libs;
+
+            if (_librarySearchVisible)
+                PerformLibrarySearch(_librarySearchText);
+        }
+
+        public void ShowLibrarySearch()
+        {
+            _librarySearchVisible = true;
+            _librarySearchJustOpened = true;
+
+            ImGui.OpenPopup("Library Search");
+
+            LoadLibraries().Forget();
+        }
+
+        public void DrawLibrarySearchWindow()
+        {
+            if (!_librarySearchVisible)
+                return;
+
+            bool open = true;
+            if (ImGui.BeginPopupModal("Library Search", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+            {
+                if (_librarySearchJustOpened)
+                {
+                    ImGui.SetKeyboardFocusHere();
+                    _librarySearchJustOpened = false;
+                }
+
+                ImGui.Text("Search libraries:");
+                ImGui.SameLine();
+                string oldSearchText = _librarySearchText;
+                ImGui.InputText("##LibrarySearch", ref _librarySearchText, 256, ImGuiInputTextFlags.EnterReturnsTrue);
+                if (oldSearchText != _librarySearchText)
+                    PerformLibrarySearch(_librarySearchText);
+
+                // Search if Enter pressed or text changed
+                if (ImGui.IsItemDeactivatedAfterEdit() || ImGui.IsItemFocused() && ImGui.IsKeyPressed(ImGuiKey.Enter))
+                {
+                    if (_librarySearchResults.Count > 0)
+                    {
+                        LoadLibraryEntry(_librarySearchResults[0]);
+                        _librarySearchVisible = false;
+                        ImGui.CloseCurrentPopup();
+                    }
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Create new"))
+                {
+                    var editor = new IEditor(KeyHandler);
+                    editor.Title = _librarySearchText;
+                    editor.ResetCode("");
+                    Tabs.Add(editor);
+                    _activeTabIndex = Tabs.Count - 1;
+                    _librarySearchVisible = false;
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.Separator();
+
+                // Show results
+                if (_librarySearchResults.Count == 0)
+                {
+                    ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "No results found.");
+                }
+                else
+                {
+                    ImGui.BeginChild("LibrarySearchResults", new Vector2(500, 400), true);
+                    for (int i = 0; i < _librarySearchResults.Count; i++)
+                    {
+                        var lib = _librarySearchResults[i];
+
+                        var entryLabel = "";
+                        if (lib.WorkshopFileHandle != 0)
+                            entryLabel = $"{lib.Title} by {lib.Author} (workshop)";
+                        else
+                            entryLabel = $"{lib.Title} by {lib.Author} (local)";
+                        if (ImGui.Selectable(entryLabel, _librarySelectedIndex == i))
+                            _librarySelectedIndex = i;
+
+                        // Tooltip showing first 20 lines
+                        if (ImGui.IsItemHovered())
+                        {
+                            ImGui.BeginTooltip();
+                            var preview = GetLibraryPreview(lib);
+                            ImGui.TextUnformatted(preview);
+                            ImGui.EndTooltip();
+                        }
+
+                        // Double-click to load
+                        if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                        {
+                            LoadLibraryEntry(lib);
+                            _librarySearchVisible = false;
+                            ImGui.CloseCurrentPopup();
+                        }
+                    }
+                    ImGui.EndChild();
+                }
+
+                ImGui.Separator();
+                if (ImGui.Button("Close"))
+                {
+                    _librarySearchVisible = false;
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
+
+            if (!open)
+            {
+                _librarySearchVisible = false;
+            }
+        }
+
+        private void PerformLibrarySearch(string query)
+        {
+            _librarySearchResults.Clear();
+
+            // if (string.IsNullOrWhiteSpace(query))
+            // return;
+
+            string q = query.Trim().ToLowerInvariant();
+
+            foreach (var kvp in _libraryCodes)
+            {
+                if (string.IsNullOrEmpty(q) || kvp.Key.ToLowerInvariant().Contains(q) ||
+                    kvp.Value.Instructions.ToLowerInvariant().Contains(q))
+                {
+                    _librarySearchResults.Add(kvp.Value);
+                }
+            }
+        }
+
+        private string GetLibraryPreview(InstructionData lib)
+        {
+            if (lib?.Instructions == null)
+                return "";
+
+            var header = $"Title: {lib.Title}\nAuthor: {lib.Author}\n";
+            var date = new DateTime(lib.DateTime, DateTimeKind.Utc);
+            header += $"Date: {date}\n";
+            header += $"Description: {lib.Description}\n\n";
+            var lines = lib.Instructions.Split('\n');
+            int count = Math.Min(15, lines.Length);
+            var preview = string.Join("\n", lines.Take(count));
+            return header + preview + "\n...";
+        }
+
+        private void LoadLibraryEntry(InstructionData lib)
+        {
+            if (lib == null)
+                return;
+
+            var editor = new IEditor(KeyHandler, lib);
+            editor.Title = lib.Title;
+            editor.ResetCode(lib.Instructions);
+            Tabs.Add(editor);
+            _activeTabIndex = Tabs.Count - 1;
+        }
+
+        public void DrawLibrarySearchWindow123()
+        {
+            if (!_librarySearchVisible)
+                return;
+
+            ImGui.BeginPopupModal("Library Search");
+            ImGui.Text("Library search is not implemented yet.");
+            ImGui.Separator();
+            ImGui.InputText("Search", ref _librarySearchText, 256);
+
+            ImGui.TextWrapped("Library search functionality is not implemented in this version of the editor. Sorry for the inconvenience.");
+            // generate results (full text case-insensitive search)
+            // show all results as a list
+            ImGui.Separator();
+
+            if (ImGui.Button("Close"))
+            {
+                _librarySearchVisible = false;
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.SameLine();
+
+            ImGui.EndPopup();
+        }
+
+        public void SwitchToNativeEditor()
+        {
+            UseNativeEditor = true;
+            Show = false;
+
+            // localPosition was set to -10000,-10000,0 to hide the native editor, so set it back to 0,0,0 to show it
+            InputSourceCode.Instance.Window.localPosition = new Vector3(0, 0, 0);
+            KeyManager.RemoveInputState("ic10editorinputstate");
+            InputSourceCode.Paste(MotherboardTab.Code);
+        }
+
+        public void Confirm()
+        {
+            if (LimitExceeded)
+            {
+                ActiveTab.CommandStatus = LimitExceededMessage;
+                return;
+            }
+            ActiveTab.Save();
+            HideWindow();
+        }
+
+        public void Export()
+        {
+            if (LimitExceeded)
+            {
+                ActiveTab.CommandStatus = LimitExceededMessage;
+                return;
+            }
+            Confirm();
+            MotherboardTab.PCM.Export();
+        }
+        public void HideWindow()
+        {
+            if (Show == false)
+                return;
+
+            Show = false;
+            KeyManager.RemoveInputState("ic10editorinputstate");
+            if (InputWindow.InputState == InputPanelState.Waiting)
+                InputWindow.CancelInput();
+            if (WorldManager.IsGamePaused)
+                InputSourceCode.Instance.PauseGameToggle(false);
+            InputSourceCode.Instance.ButtonInputCancel();
+
+            // This fixes following behavior:
+            // 1. Open IC10 editor while alt key is pressed (e.g. laptop)
+            // 2. Close IC10 editor with cancel button
+            // -> Right click action on any tool not working until alt key is pressed again
+            InputMouse.SetMouseControl(false);
+        }
+
+        public void ShowWindow()
+        {
+            Show = true;
+            KeyManager.SetInputState("ic10editorinputstate", KeyInputState.Typing);
+
+            if (VimEnabled)
+                KeyHandler.Mode = KeyMode.VimNormal;
+
+            if (!WorldManager.IsGamePaused && PauseOnOpen)
+                InputSourceCode.Instance.PauseGameToggle(true);
+
+            InputSourceCode.Instance.RectTransform.localPosition = new Vector3(-10000, -10000, 0);
+        }
+
+        public bool IsInitialized = false;
+        public void SetTitle(string title)
+        {
+            Title = title;
+        }
+
         public void HandleInput(bool hasFocus)
         {
             KeyHandler.HandleInput(hasFocus);
         }
-
-        public static Vector2 buttonSize => Scale * new Vector2(85, 0);
-        public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);
 
         public void ShowNativeWindow(HelpMode mode)
         {
@@ -829,7 +1152,7 @@ namespace StationeersIC10Editor
             ImGui.SameLine();
 
             if (ImGui.Button("Clear", buttonSize))
-                ClearCode();
+                ActiveTab.ClearCode();
 
             ImGui.SameLine();
 
@@ -840,8 +1163,8 @@ namespace StationeersIC10Editor
 
             if (ImGui.Button("Paste", buttonSize))
             {
-                ClearCode();
-                Insert(GameManager.Clipboard);
+                ActiveTab.ClearCode();
+                ActiveTab.Insert(GameManager.Clipboard);
             }
 
             ImGui.SameLine();
@@ -858,8 +1181,16 @@ namespace StationeersIC10Editor
 
             ImGui.SameLine();
 
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 3 * smallButtonSize.x - buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x * 3);
+            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 5 * smallButtonSize.x - buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x * 3);
 
+            bool isIC10 = ActiveTab.CodeFormatter as IC10.IC10CodeFormatter != null;
+            if (ImGui.Button(isIC10 ? "IC10" : "txt"))
+            {
+                ActiveTab.CodeFormatter = CodeFormatters.GetFormatter(isIC10 ? "Plain" : "txt");
+                ActiveTab.CodeFormatter.ResetCode(ActiveTab.Code);
+            }
+
+            ImGui.SameLine();
 
             if (ImGui.Button("s(x)", smallButtonSize))
                 ShowNativeWindow(HelpMode.SlotVariables);
@@ -956,51 +1287,6 @@ namespace StationeersIC10Editor
             ImGui.PopStyleVar();
         }
 
-        public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
-        public static bool EnforceLineLimit => IC10EditorPlugin.EnforceLineLimit.Value;
-        public static bool EnforceByteLimit => IC10EditorPlugin.EnforceByteLimit.Value;
-        public static bool PauseOnOpen => IC10EditorPlugin.PauseOnOpen.Value;
-        public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
-        public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
-        public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
-
-
-        public bool LimitExceeded => (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
-
-        private const string _limitExceededMessage = "Size limit exceeded: cannot save or export.";
-
-        public void Write()
-        {
-            if (LimitExceeded)
-            {
-                KeyHandler.CommandStatus = _limitExceededMessage;
-                return;
-            }
-            KeyHandler.CommandStatus = "Saved file";
-            _pcm.InputFinished(Code);
-        }
-
-        public void Confirm()
-        {
-            if (LimitExceeded)
-            {
-                KeyHandler.CommandStatus = _limitExceededMessage;
-                return;
-            }
-            Write();
-            HideWindow();
-        }
-
-        public void Export()
-        {
-            if (LimitExceeded)
-            {
-                KeyHandler.CommandStatus = _limitExceededMessage;
-                return;
-            }
-            Confirm();
-            _pcm.Export();
-        }
 
         private Vector2 _textAreaOrigin, _textAreaSize;
         private float _scrollY = 0.0f;
@@ -1033,7 +1319,7 @@ namespace StationeersIC10Editor
 
             Vector2 mousePos = ImGui.GetMousePos();
 
-            if (ScrollToCaret > 0)
+            if (ActiveTab.ScrollToCaret > 0)
             {
                 float lineHeight = ImGui.GetTextLineHeightWithSpacing();
                 float lineSpacing = ImGui.GetStyle().ItemSpacing.y;
@@ -1056,7 +1342,7 @@ namespace StationeersIC10Editor
                 }
 
                 ImGui.SetScrollY(Math.Min(scrollY, ImGui.GetScrollMaxY()));
-                ScrollToCaret -= 1;
+                ActiveTab.ScrollToCaret -= 1;
             }
 
             _scrollY = ImGui.GetScrollY();
@@ -1084,7 +1370,7 @@ namespace StationeersIC10Editor
                 float charHeight = ImGui.GetTextLineHeightWithSpacing();
                 var completePos = _caretPixelPos + new Vector2(0, 1.5f * charHeight);
 
-                CodeFormatter.DrawAutocomplete(this, CaretPos, completePos);
+                CodeFormatter.DrawAutocomplete(ActiveTab, CaretPos, completePos);
             }
 
             clipper.End();
@@ -1100,7 +1386,7 @@ namespace StationeersIC10Editor
 
             if (KeyHandler.Mode == KeyMode.Insert)
             {
-                bool blinkOn = ((int)((ImGui.GetTime() - _timeLastAction) * 2) % 2) == 0;
+                bool blinkOn = ((int)((ImGui.GetTime() - ActiveTab.TimeLastAction) * 2) % 2) == 0;
                 if (blinkOn)
                 {
                     drawList.AddLine(
@@ -1129,6 +1415,9 @@ namespace StationeersIC10Editor
         private Vector2 _windowPos = new Vector2(100, 100);
         private bool _didGameWindowOpen = false;
 
+
+        public bool HasFocus => _hasFocus && !_librarySearchVisible;
+
         public void CalcDidGameWindowOpen()
         {
             int count = 0;
@@ -1143,6 +1432,15 @@ namespace StationeersIC10Editor
 
         private Queue<double> _renderTimes = new();
         private System.Diagnostics.Stopwatch _renderStopwatch;
+
+        public void DrawEditor()
+        {
+            ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
+            _windowPos = ImGui.GetWindowPos();
+
+            DrawCodeArea();
+            ImGui.PopFont();
+        }
 
         public void Draw()
         {
@@ -1186,20 +1484,37 @@ namespace StationeersIC10Editor
             }
 
             ImGui.Begin(Title + "###IC10EditorWindow", ImGuiWindowFlags.NoSavedSettings);
+
+            // Create a tab bar (the shared titlebar effect comes from this)
+
             ImGui.SetWindowFontScale(Scale);
             DrawHeader();
 
-            ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
-            _windowPos = ImGui.GetWindowPos();
-
-            HandleInput(_hasFocus);
+            if (HasFocus)
+                HandleInput(_hasFocus);
 
             _hasFocus = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
 
-            DrawCodeArea();
-            ImGui.PopFont();
+
+            if (ImGui.BeginTabBar("EditorTabs"))
+            {
+                for (int i = 0; i < Tabs.Count; i++)
+                {
+                    var tab = Tabs[i];
+                    bool isOpen = _activeTabIndex == i;
+                    if (ImGui.BeginTabItem($"{tab.Title} ###{i}", isOpen ? ImGuiTabItemFlags.SetSelected : 0))
+                    {
+                        DrawEditor();
+                        ImGui.EndTabItem();
+                    }
+                    if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                        _activeTabIndex = i;
+                }
+            }
+            ImGui.EndTabBar();
 
             DrawFooter();
+            DrawLibrarySearchWindow();
 
 
             ImGui.End();
@@ -1211,10 +1526,8 @@ namespace StationeersIC10Editor
                 if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
                 {
                     var pos = GetTextPositionFromMouse(false);
-                    ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
                     if (pos)
                         CodeFormatter.DrawTooltip(Lines[CaretLine], pos, _caretPixelPos);
-                    ImGui.PopFont();
                 }
                 ImGui.PopFont();
             }
@@ -1225,6 +1538,35 @@ namespace StationeersIC10Editor
             ImGui.PopFont();
 
 
+        }
+
+        public void CloseTab()
+        {
+            var index = _activeTabIndex;
+            if (index == 0)
+                return;
+            if (Tabs.Count <= 1)
+                return;
+            Tabs.RemoveAt(index);
+            if (_activeTabIndex >= Tabs.Count)
+                _activeTabIndex = Tabs.Count - 1;
+
+        }
+        public void PreviousTab()
+        {
+            _activeTabIndex = (_activeTabIndex - 1 + Tabs.Count) % Tabs.Count;
+        }
+        public void NextTab()
+        {
+            _activeTabIndex = (_activeTabIndex + 1) % Tabs.Count;
+        }
+
+        public void SetTab(int index)
+        {
+            index--;
+            if (index < 0 || index >= Tabs.Count)
+                return;
+            _activeTabIndex = index;
         }
 
         private void DrawBoolOption(string label, ConfigEntry<bool> entry)
@@ -1333,8 +1675,6 @@ namespace StationeersIC10Editor
             ImGui.PopStyleColor();
         }
 
-        private Queue<string> _keyLog = new Queue<string>();
-
         public void DrawDebugWindow()
         {
             if (!_debugWindowVisible)
@@ -1371,32 +1711,7 @@ namespace StationeersIC10Editor
             }
 
             ImGui.Separator();
-
-            bool lastWasChar = true;
-            foreach (var key in _keyLog)
-            {
-                if (lastWasChar && key.Length == 1)
-                    ImGui.SameLine();
-                ImGui.Text(key);
-                lastWasChar = key.Length == 1;
-            }
-
         }
-
-        public void ResetCode(string code, bool pushUndo = true)
-        {
-            code = code.Replace("\r", string.Empty);
-            ClearCode(pushUndo);
-            Lines.Clear();
-            var lines = code.Split('\n');
-            CodeFormatter.ResetCode(code);
-            foreach (var line in lines)
-                Lines.Add(line);
-            CaretPos = new TextPosition(0, 0);
-            if (pushUndo)
-                PushUndoState(false);
-        }
-
 
         public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
         {

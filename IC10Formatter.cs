@@ -10,6 +10,8 @@ namespace StationeersIC10Editor
     {
         public class IC10CodeFormatter : ICodeFormatter
         {
+
+
             private void DrawRegistersGrid()
             {
                 // todo: store this information, update only when code changes
@@ -32,10 +34,10 @@ namespace StationeersIC10Editor
                 Vector2 startPos = ImGui.GetCursorScreenPos();
                 Vector2 windowSize = ImGui.GetWindowSize();
 
-                Vector2 rectSize = new Vector2(9, 9) * IC10Editor.Scale;
-                float spacing = 4.0f * IC10Editor.Scale;
+                Vector2 rectSize = new Vector2(9, 9) * Settings.Scale;
+                float spacing = 4.0f * Settings.Scale;
 
-                startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * IC10Editor.buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
+                startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * Settings.buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
                 startPos.y += 8.0f;
 
                 uint colorUsed = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
@@ -103,7 +105,7 @@ namespace StationeersIC10Editor
 
                         ImGui
                             .GetWindowDrawList()
-                            .AddRectFilled(selStart, selEnd, ICodeFormatter.ColorSelection);
+                            .AddRectFilled(selStart, selEnd, ColorSelection);
                     }
                 }
 
@@ -181,6 +183,12 @@ namespace StationeersIC10Editor
 
             private List<IC10Line> Code = new List<IC10Line>();
 
+
+            static IC10CodeFormatter()
+            {
+                CodeFormatters.RegisterFormatter("IC10", () => new IC10CodeFormatter());
+            }
+
             public IC10CodeFormatter()
             {
                 Code = new List<IC10Line>();
@@ -257,7 +265,7 @@ namespace StationeersIC10Editor
 
             public override void ResetCode(string code)
             {
-                L.Info("IC10CodeFormatter - Reset");
+                L.Debug("IC10CodeFormatter - Reset");
                 defines.Clear();
                 regAliases.Clear();
                 devAliases.Clear();
@@ -265,10 +273,8 @@ namespace StationeersIC10Editor
                 Code.Clear();
 
                 var lines = code.Split('\n');
-                L.Info($"ResetCode: {lines.Length} lines");
                 foreach (var line in lines)
                     AppendLine(line);
-
             }
 
             public void UpdateDataType(string token)
@@ -461,13 +467,13 @@ namespace StationeersIC10Editor
                 return _suggestion;
             }
 
-            public override void DrawAutocomplete(IC10Editor ed, TextPosition caret, Vector2 pos)
+            public override void DrawAutocomplete(IEditor ed, TextPosition caret, Vector2 pos)
             {
                 _suggestion = null;
                 if (!ed.IsWordEnd(caret) && caret.Col < Code[caret.Line].Length)
                     return;
 
-                if (ed.KeyHandler.Mode != KeyMode.Insert)
+                if (ed.KeyMode != KeyMode.Insert)
                     return;
 
                 caret.Col--;

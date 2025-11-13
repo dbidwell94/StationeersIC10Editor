@@ -1,5 +1,6 @@
 namespace StationeersIC10Editor
 {
+    using System;
     using System.Collections.Generic;
     using UnityEngine;
 
@@ -14,6 +15,36 @@ namespace StationeersIC10Editor
             Color = ICodeFormatter.ColorFromHTML(color);
             Text = text;
             Pos = pos;
+        }
+    }
+
+
+    public static class CodeFormatters
+    {
+        private static Dictionary<string, Func<ICodeFormatter>> formatters = new Dictionary<string, Func<ICodeFormatter>>();
+
+        public static void RegisterFormatter(string name, Func<ICodeFormatter> formatter)
+        {
+            L.Info($"Registering code formatter: {name}");
+            if (!formatters.ContainsKey(name))
+                formatters.Add(name, formatter);
+        }
+
+        public static ICodeFormatter GetFormatter(string name)
+        {
+            if (formatters.ContainsKey(name))
+                return formatters[name]();
+            L.Warning($"Code formatter not found: {name}");
+            if (formatters.Count > 0)
+            {
+                foreach (var fmt in formatters)
+                {
+                    L.Warning($"Returning first available formatter: {fmt.Key}");
+                    return fmt.Value();
+                }
+            }
+            L.Warning("No code formatters registered");
+            return null;
         }
     }
 
@@ -33,8 +64,9 @@ namespace StationeersIC10Editor
         public abstract void InsertLine(int index, string line);
         public abstract void AppendLine(string line);
         public abstract bool DrawTooltip(string line, TextPosition caret, Vector2 pos);
-        public abstract void DrawAutocomplete(IC10Editor ed, TextPosition caret, Vector2 pos);
+        public abstract void DrawAutocomplete(IEditor ed, TextPosition caret, Vector2 pos);
         public abstract string GetAutocompleteSuggestion();
+
 
         public static uint ColorFromHTML(string htmlColor)
         {
@@ -43,6 +75,7 @@ namespace StationeersIC10Editor
                 L.Warning("ColorFromHTML: empty color string");
                 return ColorDefault;
             }
+
             if (htmlColor.StartsWith("0x"))
                 htmlColor = htmlColor.Substring(2);
             if (!htmlColor.StartsWith("#"))

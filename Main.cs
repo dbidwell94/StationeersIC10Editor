@@ -74,6 +74,10 @@ namespace StationeersIC10Editor
 
                 _harmony = new Harmony(PluginGuid);
                 _harmony.PatchAll();
+
+                CodeFormatters.RegisterFormatter("Plain", () => new PlainTextFormatter());
+                CodeFormatters.RegisterFormatter("IC10", () => new IC10.IC10CodeFormatter());
+
             }
             catch (Exception ex)
             {

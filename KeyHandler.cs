@@ -7,18 +7,21 @@ namespace StationeersIC10Editor
     using Assets.Scripts.UI;
     using UnityEngine;
 
+    using static Settings;
+
     public enum KeyMode
     {
         Insert,
         VimNormal
     }
 
-    public struct VimCommand
+    public class VimCommand
     {
-        public string Command;
-        public char Movement;
-        public string Argument;
-        private uint _count;
+        public string Command = "";
+        public char Movement = '\0';
+        public string Argument = "";
+        private uint _count = 0;
+        private KeyHandler Handler;
 
         public uint Count
         {
@@ -26,14 +29,12 @@ namespace StationeersIC10Editor
             set => _count = value;
         }
 
-        public VimCommand()
+        public VimCommand(KeyHandler handler)
         {
-            Command = "";
-            Count = 0;
-            Movement = '\0';
-            Argument = "";
+            Handler = handler;
         }
 
+        public bool IsEmpty => Command == "" && Movement == '\0' && _count == 0 && Argument == "";
         public bool IsFind => Movement == 'f' || Movement == 't';
         public bool IsSearch => Command == "*" || Command == "/" || Command == "?";
         public bool IsMovement => Movement != '\0' && _movements.Contains(Movement.ToString());
@@ -125,7 +126,7 @@ namespace StationeersIC10Editor
             }
         }
 
-        public TextRange CaretAfterMove(IC10Editor ed)
+        public TextRange CaretAfterMove(IEditor ed)
         {
             var startPos = ed.CaretPos;
             var pos = ed.CaretPos;
@@ -220,9 +221,8 @@ namespace StationeersIC10Editor
             return ed.Clamp(new TextRange(startPos, pos));
         }
 
-        public string Execute(IC10Editor editor)
+        public string Execute(IEditor editor)
         {
-            L.Info($"Executing Vim command: {this.ToString()}");
             TextRange range;
             if (editor.HaveSelection)
                 range = editor.Clamp(editor.Selection.Sorted());
@@ -238,8 +238,6 @@ namespace StationeersIC10Editor
             switch (Command)
             {
                 case "":
-                case "f":
-                case "t":
                 case "h":
                 case "j":
                 case "k":
@@ -272,18 +270,18 @@ namespace StationeersIC10Editor
                     break;
                 case "c":
                 case "C":
-                    editor.KeyHandler.InsertMode();
+                    Handler.InsertMode();
                     editor.DeleteRange(range, false);
                     editor.CaretPos = range.Start;
                     break;
                 case "O":
-                    editor.KeyHandler.InsertMode();
+                    Handler.InsertMode();
                     editor.CaretPos = new TextPosition(editor.CaretLine, 0);
                     editor.Insert("\n");
                     editor.CaretPos = new TextPosition(editor.CaretLine - 1, 0);
                     break;
                 case "o":
-                    editor.KeyHandler.InsertMode();
+                    Handler.InsertMode();
                     bool move = editor.CaretLine < editor.Lines.Count - 1;
                     editor.CaretPos = editor.Clamp(new TextPosition(editor.CaretLine + 1, 0));
                     editor.Insert("\n");
@@ -296,18 +294,18 @@ namespace StationeersIC10Editor
                 case "i":
                 case "a":
                     editor.CaretPos = range.End;
-                    editor.KeyHandler.InsertMode();
+                    Handler.InsertMode();
                     break;
                 case "I":
                 case "A":
                     editor.CaretPos = range.End;
-                    editor.KeyHandler.InsertMode();
+                    Handler.InsertMode();
                     break;
                 case "J":
                     if (range.End.Line > range.Start.Line)
                     {
                         var newCode = editor.GetCode(range).Replace("\n", " ");
-                        editor.KeyHandler.OnKeyPressed($"J - Join lines, range={range}, newCode='{newCode}', oldCode='{editor.GetCode(range)}'");
+                        Handler.OnKeyPressed($"J - Join lines, range={range}, newCode='{newCode}', oldCode='{editor.GetCode(range)}'");
                         editor.DeleteRange(range);
                         editor.Insert(newCode);
                     }
@@ -374,7 +372,7 @@ namespace StationeersIC10Editor
                     }
                     break;
                 case "gf":
-                    editor.KeyHandler.OpenStationPedia(editor.CaretPos);
+                    Handler.OpenStationPedia(editor.CaretPos);
                     break;
                 case "~":
                     editor.PushUndoState(false);
@@ -394,13 +392,10 @@ namespace StationeersIC10Editor
                         switch (c)
                         {
                             case 'q':
-                                L.Info("Vim command :q - exiting editor");
-                                editor.HideWindow();
+                                Handler.Window.HideWindow();
                                 break;
                             case 'w':
-                                L.Info("Vim command :w - writing editor");
-                                editor.Write();
-                                status = "Code saved";
+                                status = editor.Save();
                                 break;
                         }
                     }
@@ -435,14 +430,30 @@ namespace StationeersIC10Editor
     public class KeyHandler
     {
         public Action<string> OnKeyPressed = delegate { };
-        public static bool VimEnabled => IC10EditorPlugin.VimBindings.Value;
 
-        IC10Editor Editor;
-        public KeyMode Mode = KeyMode.Insert;
+        public EditorWindow Window;
+        public IEditor Editor => Window.ActiveTab;
+
+        public KeyMode Mode
+        {
+            get
+            {
+                return Window.KeyMode;
+            }
+            set
+            {
+                Window.KeyMode = value;
+            }
+        }
 
         private bool _isSelecting = false;
         private double _timeLastMouseMove = 0.0;
         private Vector2 _lastMousePos = new Vector2(0, 0);
+
+        private VimCommand CurrentCommand;
+        private VimCommand LastCommand;
+        private VimCommand LastFindCommand;
+        private VimCommand LastSearchCommand;
 
         TextPosition CaretPos
         {
@@ -468,9 +479,18 @@ namespace StationeersIC10Editor
             set => Editor.CaretLine = value;
         }
 
-        public KeyHandler(IC10Editor editor)
+        public KeyHandler(EditorWindow window)
         {
-            Editor = editor;
+            Window = window;
+            OnKeyPressed = (s) =>
+            {
+                CommandStatus = "";
+            };
+
+            CurrentCommand = new VimCommand(this);
+            LastCommand = new VimCommand(this);
+            LastFindCommand = new VimCommand(this);
+            LastSearchCommand = new VimCommand(this);
         }
 
         TextPosition Move(TextPosition pos, MoveAction action)
@@ -543,14 +563,14 @@ namespace StationeersIC10Editor
                 _lastMousePos = mousePos;
             }
 
-            if (Editor.IsMouseInsideTextArea())
+            if (Window.IsMouseInsideTextArea())
             {
                 if (ctrlDown)
                 {
                     if (ImGui.IsMouseReleased(0))
                     {
                         OnKeyPressed("Ctrl+Click");
-                        OpenStationPedia(Editor.GetTextPositionFromMouse());
+                        OpenStationPedia(Window.GetTextPositionFromMouse());
                     }
                 }
                 else
@@ -559,7 +579,7 @@ namespace StationeersIC10Editor
                     {
                         OnKeyPressed("DoubleClick");
                         _isSelecting = false;
-                        var clickPos = Editor.GetTextPositionFromMouse();
+                        var clickPos = Window.GetTextPositionFromMouse();
                         var range = Editor.GetWordAt(clickPos);
 
                         Editor.Selection.Start = range.Start;
@@ -571,13 +591,13 @@ namespace StationeersIC10Editor
                     {
                         OnKeyPressed("Click");
                         _isSelecting = true;
-                        var clickPos = Editor.GetTextPositionFromMouse();
+                        var clickPos = Window.GetTextPositionFromMouse();
                         CaretPos = clickPos;
                         Editor.Selection.Start = clickPos;
                         Editor.Selection.End.Reset();
                     }
                     else if (_isSelecting)
-                        Editor.Selection.End = Editor.GetTextPositionFromMouse();
+                        Editor.Selection.End = Window.GetTextPositionFromMouse();
 
                     if (ImGui.IsMouseReleased(0))
                         _isSelecting = false;
@@ -594,13 +614,17 @@ namespace StationeersIC10Editor
                 // these combos are not captured by ImGui for some reason, so handle them via Unity Input
                 if (Input.GetKeyDown(KeyCode.S))
                 {
-                    Editor.Write();
+                    Editor.Save();
                     CommandStatus = "Code saved";
                 }
                 if (Input.GetKeyDown(KeyCode.E))
-                    Editor.Export();
+                    Window.Export();
                 if (Input.GetKeyDown(KeyCode.Q))
-                    Editor.HideWindow();
+                    Window.HideWindow();
+                if (Input.GetKeyDown(KeyCode.L))
+                    Window.ShowLibrarySearch();
+                if (Input.GetKeyDown(KeyCode.W))
+                    Window.CloseTab();
             }
 
             if (ctrlDown)
@@ -756,7 +780,7 @@ namespace StationeersIC10Editor
                 char c = (char)io.InputQueueCharacters[i];
                 if (c == '\t')
                 {
-                    string suggestion = IC10Editor.EnableAutoComplete ? Editor.CodeFormatter.GetAutocompleteSuggestion() : null;
+                    string suggestion = EnableAutoComplete ? Editor.CodeFormatter.GetAutocompleteSuggestion() : null;
                     if (suggestion == null)
                         input += "  ";
                     else
@@ -770,20 +794,12 @@ namespace StationeersIC10Editor
             {
                 OnKeyPressed($"{input}");
                 if (!Editor.DeleteSelectedCode() && !VimEnabled)
-                {
-                    L.Info($"Pushing undo state for input: {input}");
                     Editor.PushUndoState();
-                }
 
                 CurrentLine = CurrentLine.Insert(CaretCol, input);
                 CaretCol += input.Length;
             }
         }
-
-        private VimCommand CurrentCommand = new VimCommand();
-        private VimCommand LastCommand = new VimCommand();
-        private VimCommand LastFindCommand = new VimCommand();
-        private VimCommand LastSearchCommand = new VimCommand();
 
         private TextRange LineRange(int line, uint count)
         {
@@ -799,6 +815,7 @@ namespace StationeersIC10Editor
             if (CurrentCommand.IsComplete)
             {
                 CommandStatus = CurrentCommand.Execute(Editor);
+                Editor.Selection.Reset();
                 if (CurrentCommand.IsFind)
                     LastFindCommand = CurrentCommand;
                 else if (CurrentCommand.IsSearch)
@@ -815,6 +832,8 @@ namespace StationeersIC10Editor
 
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             {
+                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
                 // these combos are not captured by ImGui for some reason, so handle them via Unity Input
                 if (Input.GetKeyDown(KeyCode.U))
                 {
@@ -830,6 +849,23 @@ namespace StationeersIC10Editor
                 {
                     OnKeyPressed("Ctrl+R");
                     Editor.Redo();
+                }
+
+                if (shift && Input.GetKeyDown(KeyCode.Space))
+                    Window.PreviousTab();
+                else if (!shift && Input.GetKeyDown(KeyCode.Space))
+                    Window.NextTab();
+
+                for (int i = 0; i < io.InputQueueCharacters.Size; i++)
+                {
+                    char c = (char)io.InputQueueCharacters[i];
+                    L.Info($"Ctrl+{c} pressed");
+
+                    if (char.IsDigit(c))
+                    {
+                        int index = c - '0';
+                        Window.SetTab(index + 1);
+                    }
                 }
             }
 
@@ -848,7 +884,6 @@ namespace StationeersIC10Editor
 
             if (Input.GetKeyDown(KeyCode.Return))
             {
-                L.Info("Enter key in Vim Normal mode, command before: " + CurrentCommand.ToString());
                 if (CurrentCommand.IsLineCommand)
                     CurrentCommand.AddChar('\n');
                 else
@@ -856,8 +891,6 @@ namespace StationeersIC10Editor
                     CurrentCommand.Reset();
                     CurrentCommand.AddChar('j');
                 }
-
-                L.Info("Enter key in Vim Normal mode, command now: " + CurrentCommand.ToString());
 
                 CheckCommand();
             }
@@ -871,27 +904,29 @@ namespace StationeersIC10Editor
 
                 OnKeyPressed($"{c}");
 
-                if (c == '.')
+                if (CurrentCommand.IsEmpty)
                 {
-                    if (LastCommand.IsComplete)
-                        CommandStatus = LastCommand.Execute(Editor);
-                    continue;
-                }
+                    if (c == '.')
+                    {
+                        if (LastCommand.IsComplete)
+                            CommandStatus = LastCommand.Execute(Editor);
+                        continue;
+                    }
 
-                if (c == ';')
-                {
-                    if (LastFindCommand.IsComplete)
-                        CommandStatus = LastFindCommand.Execute(Editor);
-                    continue;
-                }
+                    if (c == ';')
+                    {
+                        if (LastFindCommand.IsComplete)
+                            CommandStatus = LastFindCommand.Execute(Editor);
+                        continue;
+                    }
 
-                if (c == 'n')
-                {
-                    if (LastSearchCommand.IsComplete)
-                        CommandStatus = LastSearchCommand.Execute(Editor);
-                    continue;
+                    if (c == 'n')
+                    {
+                        if (LastSearchCommand.IsComplete)
+                            CommandStatus = LastSearchCommand.Execute(Editor);
+                        continue;
+                    }
                 }
-
 
                 CurrentCommand.AddChar(c);
                 CheckCommand();
