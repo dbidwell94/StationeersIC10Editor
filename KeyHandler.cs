@@ -34,10 +34,20 @@ namespace StationeersIC10Editor
             Handler = handler;
         }
 
+        public VimCommand Clone()
+        {
+            var cmd = new VimCommand(Handler);
+            cmd.Command = Command;
+            cmd.Movement = Movement;
+            cmd.Argument = Argument;
+            cmd._count = _count;
+            return cmd;
+        }
+
         public bool IsEmpty => Command == "" && Movement == '\0' && _count == 0 && Argument == "";
         public bool IsFind => Movement == 'f' || Movement == 't';
-        public bool IsSearch => Command == "*" || Command == "/" || Command == "?";
-        public bool IsMovement => Movement != '\0' && _movements.Contains(Movement.ToString());
+        public bool IsSearch => Command == "*" || Command == "/" || Command == "?" || Command == "#";
+        public bool IsMovement => Command == "" && Movement != '\0' && _movements.Contains(Movement.ToString());
         public bool IsLineCommand => Command.Length == 1 && _lineCommands.Contains(Command);
 
         public void AddChar(char c)
@@ -73,7 +83,7 @@ namespace StationeersIC10Editor
         }
 
         private static readonly string _movements = "fthjklwb0$G";
-        private static readonly string _immediateSingleCharCommands = "*~aiuCDxIAOoJpPx" + _movements.Substring(2);
+        private static readonly string _immediateSingleCharCommands = "*#~aiuCDxIAOoJpPx" + _movements.Substring(2);
         private static readonly string _singleCharCommands = "cdry";
         private static readonly string _twoCharCommands = "dd yy cc gg gf << >> ";
         private static readonly string _lineCommands = "/:?"; // commands that read argument until Enter is pressed
@@ -232,7 +242,15 @@ namespace StationeersIC10Editor
             string status = null;
             var nLines = range.End.Line - range.Start.Line + 1;
             if (range.Start.Col > 0 || range.End.Col <= editor.Lines[range.End.Line].Length)
+            {
                 nLines = 0;
+                // if we copy partial lines, adjust the range end to not include a newline char
+                if (!IsMovement && range.End.Col == 0 && range.End.Line > range.Start.Line)
+                {
+                    range.End.Line -= 1;
+                    range.End.Col = editor.Lines[range.End.Line].Length;
+                }
+            }
             var sLines = $"{nLines} " + (nLines > 1 ? "lines" : "line");
 
             switch (Command)
@@ -313,46 +331,27 @@ namespace StationeersIC10Editor
                 case "gg":
                     editor.CaretLine = (int)_count;
                     break;
+                case "P":
                 case "p":
                     editor.PushUndoState(false);
                     var linesBefore = editor.Lines.Count;
                     var code = GameManager.Clipboard.Replace("\r", "");
                     bool insertLines = code.EndsWith("\n");
+                    if (insertLines && Command == "p")
+                        code = "\n" + code.Substring(0, code.Length - 1);
                     for (int i = 0; i < (int)Count; i++)
                     {
                         if (insertLines)
                         {
-                            editor.CaretCol = 0;
-                            editor.CaretLine += 1;
-                            var posBefore = editor.CaretPos;
-                            editor.Insert(code);
-                            editor.CaretPos = posBefore;
+                            TextPosition insertPos = new TextPosition(editor.CaretLine, editor.CurrentLine.Length);
+                            if (Command == "P")
+                                insertPos.Col = 0;
+                            editor.Insert(code, insertPos);
                         }
                         else
                         {
-                            editor.CaretCol += 1;
-                            editor.Insert(code);
-                        }
-                    }
-                    nLines = editor.Lines.Count - linesBefore;
-                    status = $"Pasted {nLines} line" + (nLines > 1 ? "s" : "");
-                    break;
-                case "P":
-                    editor.PushUndoState(false);
-                    linesBefore = editor.Lines.Count;
-                    code = GameManager.Clipboard.Replace("\r", "");
-                    insertLines = code.EndsWith("\n");
-                    for (int i = 0; i < (int)Count; i++)
-                    {
-                        if (insertLines)
-                        {
-                            editor.CaretCol = 0;
-                            var posBefore = editor.CaretPos;
-                            editor.Insert(code);
-                            editor.CaretPos = posBefore;
-                        }
-                        else
-                        {
+                            if (Command == "p")
+                                editor.CaretCol += 1;
                             editor.Insert(code);
                         }
                     }
@@ -401,16 +400,27 @@ namespace StationeersIC10Editor
                     }
                     break;
                 case "*":
+                case "#":
                 case "/":
                 case "?":
                     {
                         bool forward = Command == "*" || Command == "/";
 
-                        if (Command == "*")
-                            Argument = editor.GetCode(editor.GetWordAt(editor.CaretPos));
+                        if (Command == "*" || Command == "#")
+                        {
+                            Argument = editor.GetCode(editor.GetWordAt(editor.CaretPos)) + "\n";
+                            Command = forward ? "/" : "?";
+                        }
 
                         var searchTerm = Argument.TrimEnd('\n');
                         var pos = editor.FindString(editor.CaretPos, searchTerm, forward);
+                        if (!(bool)pos)
+                        {
+                            // try searching from the beginning/end
+                            var startPos = forward ? new TextPosition(0, 0) : new TextPosition(editor.Lines.Count - 1, editor.Lines[editor.Lines.Count - 1].Length);
+                            pos = editor.FindString(startPos, searchTerm, forward);
+                        }
+
                         if ((bool)pos)
                         {
                             editor.CaretPos = pos;
@@ -522,15 +532,6 @@ namespace StationeersIC10Editor
                 String status = $"Mode: {Mode} ";
                 ImGui.Text(status);
                 ImGui.SameLine();
-
-                if (Mode == KeyMode.VimNormal)
-                {
-                    if (String.IsNullOrEmpty(CommandStatus))
-                    {
-                        ImGui.Text($"{CurrentCommand}");
-                        ImGui.SameLine();
-                    }
-                }
             }
             ImGui.Text($"{CommandStatus}");
             ImGui.SameLine();
@@ -606,25 +607,45 @@ namespace StationeersIC10Editor
             }
         }
 
+        public bool _isClosing = false;
+
         public void HandleCommon(bool ctrlDown, bool shiftDown)
         {
+            if (Input.GetKeyUp(KeyCode.Q) && _isClosing)
+            {
+                Window.HideWindow();
+                return;
+            }
             var io = ImGui.GetIO();
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl))
             {
                 // these combos are not captured by ImGui for some reason, so handle them via Unity Input
                 if (Input.GetKeyDown(KeyCode.S))
-                {
-                    Editor.Save();
-                    CommandStatus = "Code saved";
-                }
+                    CommandStatus = Editor.Save();
                 if (Input.GetKeyDown(KeyCode.E))
                     Window.Export();
                 if (Input.GetKeyDown(KeyCode.Q))
-                    Window.HideWindow();
+                    _isClosing = true;
                 if (Input.GetKeyDown(KeyCode.L))
                     Window.ShowLibrarySearch();
                 if (Input.GetKeyDown(KeyCode.W))
                     Window.CloseTab();
+
+                for (int i = 0; i <= 9; i++)
+                {
+                    if (Input.GetKeyDown(KeyCode.Alpha0 + i))
+                    {
+                        L.Info($"Ctrl+Number - go to tab {i}");
+                        Window.SetTab((i + 9) % 10);
+                    }
+                }
+
+                if (shift && Input.GetKeyDown(KeyCode.Space))
+                    Window.PreviousTab();
+                else if (!shift && Input.GetKeyDown(KeyCode.Space))
+                    Window.NextTab();
+
             }
 
             if (ctrlDown)
@@ -812,16 +833,17 @@ namespace StationeersIC10Editor
 
         public void CheckCommand()
         {
+            CommandStatus = CurrentCommand.ToString();
             if (CurrentCommand.IsComplete)
             {
                 CommandStatus = CurrentCommand.Execute(Editor);
-                Editor.Selection.Reset();
                 if (CurrentCommand.IsFind)
-                    LastFindCommand = CurrentCommand;
+                    LastFindCommand = CurrentCommand.Clone();
                 else if (CurrentCommand.IsSearch)
-                    LastSearchCommand = CurrentCommand;
+                    LastSearchCommand = CurrentCommand.Clone();
                 else if (!CurrentCommand.IsMovement)
-                    LastCommand = CurrentCommand;
+                    LastCommand = CurrentCommand.Clone();
+                Editor.Selection.Reset();
                 CurrentCommand.Reset();
             }
         }
@@ -851,22 +873,7 @@ namespace StationeersIC10Editor
                     Editor.Redo();
                 }
 
-                if (shift && Input.GetKeyDown(KeyCode.Space))
-                    Window.PreviousTab();
-                else if (!shift && Input.GetKeyDown(KeyCode.Space))
-                    Window.NextTab();
 
-                for (int i = 0; i < io.InputQueueCharacters.Size; i++)
-                {
-                    char c = (char)io.InputQueueCharacters[i];
-                    L.Info($"Ctrl+{c} pressed");
-
-                    if (char.IsDigit(c))
-                    {
-                        int index = c - '0';
-                        Window.SetTab(index + 1);
-                    }
-                }
             }
 
             if (Input.GetKeyDown(KeyCode.Escape))
@@ -900,7 +907,15 @@ namespace StationeersIC10Editor
                 char c = (char)io.InputQueueCharacters[iChar];
 
                 if (ctrlDown)
-                    break;
+                {
+                    if (c >= '0' && c <= '9')
+                    {
+                        int num = (int)(c - '0');
+                        L.Info($"Ctrl+Number - go to tab {num}");
+                        Window.SetTab(num);
+                    }
+                    continue;
+                }
 
                 OnKeyPressed($"{c}");
 
@@ -924,6 +939,34 @@ namespace StationeersIC10Editor
                     {
                         if (LastSearchCommand.IsComplete)
                             CommandStatus = LastSearchCommand.Execute(Editor);
+                        continue;
+                    }
+                    if (c == 'N')
+                    {
+                        if (LastSearchCommand.IsComplete)
+                        {
+                            var cmd = LastSearchCommand.Clone();
+                            char s = cmd.Command[0];
+                            switch (s)
+                            {
+                                case '/':
+                                    cmd.Command = "?";
+                                    break;
+                                case '?':
+                                    cmd.Command = "/";
+                                    break;
+                                case '*':
+                                    cmd.Command = "#";
+                                    break;
+                                case '#':
+                                    cmd.Command = "*";
+                                    break;
+                                default:
+                                    CommandStatus = "Cannot reverse last search command";
+                                    continue;
+                            }
+                            CommandStatus = cmd.Execute(Editor);
+                        }
                         continue;
                     }
                 }

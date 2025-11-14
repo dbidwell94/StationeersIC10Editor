@@ -21,11 +21,18 @@ namespace StationeersIC10Editor
 
                 foreach (var line in Code)
                     foreach (var token in line)
-                        if (token.DataType == DataType.Register && token.Text.StartsWith("r") && token.Text != "ra")
+                        if (IC10Utils.Registers.Contains(token.Text) && token.Text.StartsWith("r") && token.Text != "ra")
                         {
                             var reg = token.Text;
                             while (reg.StartsWith("rr") && reg.Length > 3)
                                 reg = reg.Substring(1);
+                            if (int.TryParse(reg.Substring(1), out int regNum))
+                            {
+                                if (regNum >= 0 && regNum < 16)
+                                    registers[regNum] = true;
+                                else L.Warning($"Register number out of range: {reg}");
+                            }
+                            else L.Warning($"Failed to parse register number: {reg}");
                             registers[int.Parse(reg.Substring(1))] = true;
                         }
 
@@ -472,27 +479,34 @@ namespace StationeersIC10Editor
 
             public override void DrawAutocomplete(IEditor ed, TextPosition caret, Vector2 pos)
             {
+                if (ed.KeyMode != KeyMode.Insert)
+                    return;
+
                 _suggestion = null;
                 if (!ed.IsWordEnd(caret) && caret.Col < Code[caret.Line].Length)
                     return;
 
-                if (ed.KeyMode != KeyMode.Insert)
-                    return;
+                if (char.IsWhiteSpace(ed[caret]))
+                    caret.Col--;
 
-                caret.Col--;
                 var token = GetTokenAtPosition(caret, out int index);
                 if (token == null)
                     return;
 
-                if (string.IsNullOrEmpty(token.Tooltip))
-                    return;
+                // if (string.IsNullOrEmpty(token.Tooltip))
+                //     return;
 
                 var line = Code[caret.Line];
-                if (!line[0].IsInstruction)
+                if (index > 0 && !line[0].IsInstruction)
                     return;
 
-                var opcode = IC10Utils.Instructions[line[0].Text];
-                var argType = opcode.ArgumentTypes[index - 1].Compat;
+                IC10.ArgType argType = DataType.Instruction;
+
+                if (index > 0)
+                {
+                    var opcode = IC10Utils.Instructions[line[0].Text];
+                    argType = opcode.ArgumentTypes[index - 1].Compat;
+                }
 
                 float charHeight = ImGui.GetTextLineHeightWithSpacing();
                 float charWidth = ImGui.CalcTextSize("M").x;
@@ -501,15 +515,18 @@ namespace StationeersIC10Editor
 
                 foreach (var entry in IC10Utils.Types)
                     if (!entry.Key.StartsWith("rr") && !entry.Key.StartsWith("dr"))
-                        if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text, StringComparison.OrdinalIgnoreCase))
+                        if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text))
                             suggestions.Add(entry.Key);
 
                 foreach (var entry in types)
-                    if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text, StringComparison.OrdinalIgnoreCase))
+                    if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text))
                         suggestions.Add(entry.Key);
 
                 var n = suggestions.Count;
                 if (n == 0)
+                    return;
+
+                if(n==1 && suggestions[0]==token.Text)
                     return;
 
                 _suggestion = "";
@@ -551,6 +568,9 @@ namespace StationeersIC10Editor
                     width = Math.Max(ImGui.CalcTextSize(suggestion).x, width);
 
                 var completeSize = new Vector2(10.0f + width, 5.0f + charHeight * (suggestions.Count + (n > maxSuggestions ? 1 : 0)));
+                var bottomSize = ImGui.GetContentRegionAvail();
+                if(bottomSize.y < completeSize.y)
+                    pos.y -= completeSize.y - bottomSize.y;
 
                 var list = ImGui.GetWindowDrawList();
                 list.AddRectFilled(

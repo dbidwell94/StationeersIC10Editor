@@ -100,7 +100,6 @@ namespace StationeersIC10Editor
                     var t = _types[name];
                     t.Add(type);
                     _types[name] = t;
-                    L.Info($"Type collision for '{name}', now has types: {_types[name].Description}");
                 }
             }
 
@@ -609,7 +608,7 @@ namespace StationeersIC10Editor
                     if (IC10Utils.IsBuiltin(token.Text))
                         token.DataType = IC10Utils.Types[token.Text].ToDataType();
                     else if (token.IsLabel)
-                        token.DataType = DataType.Number;
+                        token.DataType = DataType.Label;
                     else if (token.IsComment)
                         token.DataType = DataType.Comment;
                     else if (types.TryGetValue(token.Text, out DataType type))
