@@ -2,6 +2,21 @@ namespace StationeersIC10Editor
 {
     namespace IC10
     {
+        using Assets.Scripts.Atmospherics;
+        using Assets.Scripts.Inventory;
+        using Assets.Scripts.Localization2;
+        using Assets.Scripts.Networking;
+        using Assets.Scripts.Objects.Entities;
+        using Assets.Scripts.Objects.Items;
+        using Assets.Scripts.Objects.Motherboards;
+        using Assets.Scripts.Objects.Pipes;
+        using Assets.Scripts.UI;
+        using Assets.Scripts.Util;
+        using Objects.Electrical;
+        using Objects.Rockets;
+        using Reagents;
+        using Trading;
+
         using System.Reflection;
         using System.Runtime.CompilerServices;
         using System;
@@ -32,6 +47,7 @@ namespace StationeersIC10Editor
             ReagentMode = 0x1000,
             Color = 0x2000,
             DeviceId = 0x4000,
+            BasicEnum = 0x8000,
         }
 
         public class IC10Utils
@@ -42,6 +58,7 @@ namespace StationeersIC10Editor
             private static HashSet<string> _devices = new HashSet<string>();
             private static HashSet<string> _constants = new HashSet<string>();
             private static HashSet<string> _batchModes = new HashSet<string>();
+            private static HashSet<string> _basicEnums = new HashSet<string>();
             private static Dictionary<string, IC10OpCode> _instructions = new Dictionary<string, IC10OpCode>();
             private static Dictionary<string, ArgType> _types = new Dictionary<string, ArgType>();
 
@@ -87,12 +104,49 @@ namespace StationeersIC10Editor
                 }
             }
 
+            static void _addEnum<T>(string name = "")
+            {
+                if (!string.IsNullOrEmpty(name))
+                    name = name + ".";
+
+                foreach (var enumName in Enum.GetNames(typeof(T)))
+                {
+                    _addType(name + enumName, DataType.BasicEnum);
+                    _basicEnums.Add(name + enumName);
+                }
+            }
+
             public static Dictionary<string, ArgType> Types
             {
                 get
                 {
                     if (_types.Count == 0)
                     {
+                        _addEnum<SoundAlert>("Sound");
+                        _addEnum<LogicTransmitterMode>("TransmitterMode");
+                        _addEnum<ElevatorMode>("ElevatorMode");
+                        _addEnum<ColorType>("Color");
+                        _addEnum<EntityState>("EntityState");
+                        _addEnum<AirControlMode>("AirControl");
+                        _addEnum<DaylightSensor.DaylightSensorMode>("DaylightSensorMode");
+                        _addEnum<ConditionOperation>();
+                        _addEnum<AirConditioningMode>("AirCon");
+                        _addEnum<VentDirection>("Vent");
+                        _addEnum<PowerMode>("PowerMode");
+                        _addEnum<RobotMode>("RobotMode");
+                        _addEnum<SortingClass>("SortingClass");
+                        _addEnum<Slot.Class>("SlotClass");
+                        _addEnum<Chemistry.GasType>("GasType");
+                        _addEnum<RocketMode>("RocketMode");
+                        _addEnum<ReEntryProfile>("ReEntryProfile");
+                        _addEnum<SorterInstruction>("SorterInstruction");
+                        _addEnum<PrinterInstruction>("PrinterInstruction");
+                        _addEnum<TraderInstruction>("TraderInstruction");
+                        _addEnum<ShuttleType>("ShuttleType");
+                        _addEnum<HashType>("HashType");
+                        _addEnum<LogicDisplay.DisplayMode>("DisplayMode");
+                        _addEnum<SettingDisplayMode>("SettingDisplayMode");
+
                         foreach (var reg in Registers)
                             _addType(reg, DataType.Register);
                         foreach (var dev in Devices)
@@ -170,6 +224,8 @@ namespace StationeersIC10Editor
                     return _devices;
                 }
             }
+
+            public static HashSet<string> BasicEnums => _basicEnums;
 
             public static HashSet<string> LogicTypes
             {
@@ -353,7 +409,7 @@ namespace StationeersIC10Editor
                     if (Has(DataType.Number))
                     {
                         at.Add(DataType.Label, DataType.Register, DataType.LogicType, DataType.LogicSlotType, DataType.BatchMode);
-                        at.Add(DataType.Color);
+                        at.Add(DataType.Color, DataType.BasicEnum);
                     }
                     if (Has(DataType.Label)) at.Add(DataType.Number, DataType.Register);
                     if (Has(DataType.DeviceId)) at.Add(DataType.Number, DataType.Register);

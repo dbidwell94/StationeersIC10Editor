@@ -159,6 +159,8 @@ namespace StationeersIC10Editor
                         return ColorComment;
                     case DataType.Unknown:
                         return ColorError;
+                    case DataType.BasicEnum:
+                        return ColorBasicEnum;
                     default:
                         return ColorDefault;
                 }
@@ -169,6 +171,7 @@ namespace StationeersIC10Editor
             public static uint ColorDevice = ColorFromHTML("#00ff00");
             public static uint ColorLogicType = ColorFromHTML("#ff8000");
             public static uint ColorRegister = ColorFromHTML("#0080ff");
+            public static uint ColorBasicEnum = ColorFromHTML("#20b2aa");
 
             public static uint ColorDefine = ColorNumber;
             public static uint ColorAlias = ColorFromHTML("#4d4dcc");
