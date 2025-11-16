@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.3.0</Version>
+  <Version>0.4.0</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -18,7 +18,7 @@
         - Switch to native editor
         - VIM bindings (see in-game help for supported commands)
         - Register usage indicator
-        - (experimental) Auto completion
+        - Auto completion
         - (optional) no line/size limit (use at your own risk, this might change or break with game updates)
 
         [b]Installation[/b]
@@ -31,14 +31,20 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.3.0:
-        - Config settings/window
-        - Checks argument types in instructions (error message as tooltip)
-        - Register usage indicator (yellow=used, green=free)
-        - VIM bindings
-        - (optionally) enforce line/bytes limit
-        - IC10 Extender mod support (optional dependency)
-        - (experimental) Auto completion
+        0.4.0:
+
+        - Multiple tabs (for editing libraries)
+        - Recognize constants like DisplayMode.Pa 
+        - Enable autocomplete by default (also fix autocomplete for instructions)
+        - Custom window to load libraries (including full-text searching)
+        - Never enforce line/byte limit for library code
+        - Allow switching between IC10/plain text (useful for notes)
+        - Export button in library tab reads "To MB" and applies it to Motherboard tab
+        - Vim: search commands /, ?, *, #, n, N
+        - Close tab with middle mouse button
+        - Case-sensitive autocomplete
+        - Fix labels highlight color
+        - Fix throwing items on close (because Q key is still pressed)
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
@@ -46,6 +52,7 @@
     <Tag>Editor</Tag>
     <Tag>Code</Tag>
     <Tag>BepInEx</Tag>
+    <Tag>VIM</Tag>
     <Tag>StationeersLaunchPad</Tag>
   </Tags>
   <Dependencies />
