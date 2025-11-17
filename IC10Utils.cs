@@ -599,6 +599,20 @@ namespace StationeersIC10Editor
                 return text.StartsWith("STR(\"") && text.EndsWith("\")");
             }
 
+            public static bool IsBinaryExpression(string text)
+            {
+                if (!text.StartsWith("%"))
+                    return false;
+
+                string digits = text.Substring(1).Replace("_", "");
+                foreach (char c in digits)
+                {
+                    if (c != '0' && c != '1')
+                        return false;
+                }
+                return true;
+            }
+
             public void SetTypes(Dictionary<string, DataType> types)
             {
                 foreach (var token in this)
@@ -625,7 +639,7 @@ namespace StationeersIC10Editor
                     }
                     else if (token.Text.StartsWith("$") && long.TryParse(token.Text.Substring(1), System.Globalization.NumberStyles.HexNumber, null, out long hexNumber))
                         token.DataType = DataType.Number;
-                    else if (IsHashExpression(token.Text) || IsStringExpression(token.Text))
+                    else if (IsHashExpression(token.Text) || IsStringExpression(token.Text) || IsBinaryExpression(token.Text))
                         token.DataType = DataType.Number;
                     else if (IsDeviceChannel(token.Text))
                         token.DataType = DataType.Device;

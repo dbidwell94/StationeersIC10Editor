@@ -526,7 +526,7 @@ namespace StationeersIC10Editor
                 if (n == 0)
                     return;
 
-                if(n==1 && suggestions[0]==token.Text)
+                if (n == 1 && suggestions[0] == token.Text)
                     return;
 
                 _suggestion = "";
@@ -569,7 +569,7 @@ namespace StationeersIC10Editor
 
                 var completeSize = new Vector2(10.0f + width, 5.0f + charHeight * (suggestions.Count + (n > maxSuggestions ? 1 : 0)));
                 var bottomSize = ImGui.GetContentRegionAvail();
-                if(bottomSize.y < completeSize.y)
+                if (bottomSize.y < completeSize.y)
                     pos.y -= completeSize.y - bottomSize.y;
 
                 var list = ImGui.GetWindowDrawList();
