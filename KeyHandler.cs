@@ -632,6 +632,12 @@ namespace StationeersIC10Editor
                 if (Input.GetKeyDown(KeyCode.W))
                     Window.CloseTab();
 
+                if (Input.GetKeyDown(KeyCode.Home))
+                    CaretPos = new TextPosition(0, 0);
+
+                if (Input.GetKeyDown(KeyCode.End))
+                    CaretPos = new TextPosition(Window.ActiveTab.Lines.Count - 1, Window.ActiveTab.Lines[Window.ActiveTab.Lines.Count - 1].Length);
+
                 for (int i = 0; i <= 9; i++)
                 {
                     if (Input.GetKeyDown(KeyCode.Alpha0 + i))
@@ -680,6 +686,14 @@ namespace StationeersIC10Editor
                     Editor.Redo();
                     OnKeyPressed("Ctrl+Y - Redo");
                 }
+            }
+            else
+            {
+                if (ImGui.IsKeyPressed(ImGuiKey.Home))
+                    CaretCol = 0;
+
+                if (ImGui.IsKeyPressed(ImGuiKey.End))
+                    CaretCol = CurrentLine.Length;
             }
 
             // check for move actions
