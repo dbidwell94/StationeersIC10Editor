@@ -5,6 +5,7 @@ namespace StationeersIC10Editor
     using System.Collections.Generic;
     using ImGuiNET;
     using UnityEngine;
+    using static Settings;
 
     namespace IC10
     {
@@ -61,15 +62,24 @@ namespace StationeersIC10Editor
                 }
             }
 
-            public override void DrawStatus()
+            public override void DrawStatus(IEditor ed, TextPosition caret)
             {
+                var status = GetTokenAtPosition(caret, out int index)?.Tooltip;
+                if (!string.IsNullOrEmpty(status))
+                {
+                    var color = status.StartsWith("Error") ? ColorError : ColorWarning;
+                    ImGui.SameLine();
+                    ImGui.PushStyleColor(ImGuiCol.Text, color);
+                    ImGui.Text(status);
+                    ImGui.PopStyleColor();
+                    ImGui.SameLine();
+                }
                 DrawRegistersGrid();
                 return;
             }
 
             public override void DrawLine(int lineIndex, string line, TextRange selection = default)
             {
-                float charWidth = ImGui.CalcTextSize("M").x;
                 if (lineIndex < 0 || lineIndex >= Code.Count)
                     return;
                 var tokens = Code[lineIndex];
@@ -77,7 +87,7 @@ namespace StationeersIC10Editor
                 ImGui
                     .GetWindowDrawList()
                     .AddText(pos, ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
-                pos.x += LineNumberOffset * charWidth;
+                pos.x += LineNumberOffset * CharWidth;
 
                 int selectionMin = -1,
                     selectionMax = -1;
@@ -85,17 +95,16 @@ namespace StationeersIC10Editor
                 foreach (var token in tokens)
                     if (token.Background != 0)
                     {
-                        var tokenPos = new Vector2(pos.x + charWidth * token.Column, pos.y);
+                        var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
                         ImGui.GetWindowDrawList().AddRectFilled(
                             tokenPos,
-                            new Vector2(tokenPos.x + charWidth * token.Text.Length,
-                                        tokenPos.y + ImGui.GetTextLineHeightWithSpacing()),
+                            new Vector2(tokenPos.x + CharWidth * token.Text.Length,
+                                        tokenPos.y + LineHeight),
                             token.Background);
                     }
 
                 if (selection)
                 {
-                    float lineHeight = ImGui.GetTextLineHeightWithSpacing();
                     if (selection.Start.Line <= lineIndex && selection.End.Line >= lineIndex)
                     {
                         selectionMin = lineIndex == selection.Start.Line ? selection.Start.Col : 0;
@@ -105,10 +114,10 @@ namespace StationeersIC10Editor
                         selectionMin = Mathf.Clamp(selectionMin, 0, line.Length);
                         selectionMax = Mathf.Clamp(selectionMax, 0, line.Length);
 
-                        Vector2 selStart = new Vector2(pos.x + (charWidth * selectionMin), pos.y);
+                        Vector2 selStart = new Vector2(pos.x + (CharWidth * selectionMin), pos.y);
                         Vector2 selEnd = new Vector2(
-                            pos.x + (charWidth * selectionMax),
-                            pos.y + lineHeight);
+                            pos.x + (CharWidth * selectionMax),
+                            pos.y + LineHeight);
 
                         ImGui
                             .GetWindowDrawList()
@@ -118,7 +127,7 @@ namespace StationeersIC10Editor
 
                 foreach (var token in tokens)
                 {
-                    var tokenPos = new Vector2(pos.x + charWidth * token.Column, pos.y);
+                    var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
                     ImGui.GetWindowDrawList().AddText(tokenPos, token.Color, token.Text);
                 }
 
@@ -508,9 +517,6 @@ namespace StationeersIC10Editor
                     argType = opcode.ArgumentTypes[index - 1].Compat;
                 }
 
-                float charHeight = ImGui.GetTextLineHeightWithSpacing();
-                float charWidth = ImGui.CalcTextSize("M").x;
-
                 var suggestions = new List<string>();
 
                 foreach (var entry in IC10Utils.Types)
@@ -567,10 +573,13 @@ namespace StationeersIC10Editor
                 foreach (var suggestion in suggestions)
                     width = Math.Max(ImGui.CalcTextSize(suggestion).x, width);
 
-                var completeSize = new Vector2(10.0f + width, 5.0f + charHeight * (suggestions.Count + (n > maxSuggestions ? 1 : 0)));
-                var bottomSize = ImGui.GetContentRegionAvail();
-                if (bottomSize.y < completeSize.y)
-                    pos.y -= completeSize.y - bottomSize.y;
+                var completeSize = new Vector2(10.0f + width, 5.0f + LineHeight * (suggestions.Count + (n > maxSuggestions ? 1 : 0)));
+                float bottomSize = ImGui.GetContentRegionAvail().y - LineHeight;
+                if (bottomSize < completeSize.y)
+                {
+                    pos.y -= completeSize.y - bottomSize;
+                    pos.x += CharWidth * 2;
+                }
 
                 var list = ImGui.GetWindowDrawList();
                 list.AddRectFilled(
@@ -586,7 +595,7 @@ namespace StationeersIC10Editor
                         pos,
                         ICodeFormatter.ColorDefault,
                         suggestion);
-                    pos.y += charHeight;
+                    pos.y += LineHeight;
                 }
 
                 if (n > maxSuggestions)

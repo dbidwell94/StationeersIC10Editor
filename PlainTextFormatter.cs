@@ -16,7 +16,7 @@ namespace StationeersIC10Editor
 
         private void DrawRegistersGrid() { }
 
-        public override void DrawStatus() { }
+        public override void DrawStatus(IEditor ed, TextPosition caret) { }
 
         public override void DrawLine(int lineIndex, string line, TextRange selection = default)
         {

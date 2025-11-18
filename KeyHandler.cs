@@ -288,6 +288,8 @@ namespace StationeersIC10Editor
                     break;
                 case "c":
                 case "C":
+                    if(Command == "c" && Movement == 'w' && range.End.Col > 0)
+                        range.End.Col--;
                     Handler.InsertMode();
                     editor.DeleteRange(range, false);
                     editor.CaretPos = range.Start;

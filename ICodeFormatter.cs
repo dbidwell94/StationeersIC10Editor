@@ -51,6 +51,7 @@ namespace StationeersIC10Editor
     public abstract class ICodeFormatter
     {
         public static uint ColorError = ColorFromHTML("#ff0000");
+        public static uint ColorWarning = ColorFromHTML("#ff8f00");
         public static uint ColorComment = ColorFromHTML("#808080");
         public static uint ColorLineNumber = ColorFromHTML("#808080");
         public static uint ColorDefault = ColorFromHTML("#ffffff");
@@ -137,7 +138,7 @@ namespace StationeersIC10Editor
         }
 
         public abstract void DrawLine(int lineIndex, string line, TextRange selection = default);
-        public abstract void DrawStatus();
+        public abstract void DrawStatus(IEditor ed, TextPosition caret);
 
         public static List<string> Tokenize(string text, bool keepWhitespace = false)
         {
