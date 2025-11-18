@@ -2,32 +2,21 @@ namespace StationeersIC10Editor
 {
     namespace IC10
     {
-        using Assets.Scripts.Atmospherics;
-        using Assets.Scripts.Inventory;
-        using Assets.Scripts.Localization2;
-        using Assets.Scripts.Networking;
-        using Assets.Scripts.Objects.Entities;
-        using Assets.Scripts.Objects.Items;
-        using Assets.Scripts.Objects.Motherboards;
-        using Assets.Scripts.Objects.Pipes;
-        using Assets.Scripts.UI;
-        using Assets.Scripts.Util;
-        using Objects.Electrical;
-        using Objects.Rockets;
-        using Reagents;
-        using Trading;
-
+        using System.Collections.Generic;
         using System.Reflection;
         using System.Runtime.CompilerServices;
-        using System;
-        using System.Text.RegularExpressions;
         using System.Text;
-        using System.Collections.Generic;
-        using Assets.Scripts;
-        using Assets.Scripts.Objects;
-        using Assets.Scripts.Objects.Electrical;
-        using Assets.Scripts.Objects.Motherboards;
+        using System;
+
         using ImGuiNET;
+        using Assets.Scripts.Atmospherics;
+        using Assets.Scripts.Objects.Electrical;
+        using Assets.Scripts.Objects.Entities;
+        using Assets.Scripts.Objects.Motherboards;
+        using Assets.Scripts.Objects.Pipes;
+        using Assets.Scripts.Objects;
+        using Assets.Scripts;
+        using Objects.Rockets;
 
         public enum DataType : uint
         {
