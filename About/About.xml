@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.4.0</Version>
+  <Version>0.4.1</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -31,20 +31,15 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.4.0:
+        0.4.1:
 
-        - Multiple tabs (for editing libraries)
-        - Recognize constants like DisplayMode.Pa 
-        - Enable autocomplete by default (also fix autocomplete for instructions)
-        - Custom window to load libraries (including full-text searching)
-        - Never enforce line/byte limit for library code
-        - Allow switching between IC10/plain text (useful for notes)
-        - Export button in library tab reads "To MB" and applies it to Motherboard tab
-        - Vim: search commands /, ?, *, #, n, N
-        - Close tab with middle mouse button
-        - Case-sensitive autocomplete
-        - Fix labels highlight color
-        - Fix throwing items on close (because Q key is still pressed)
+        - Fix calculating caret position from mouse position when UI Scaling is
+          active
+        - Show error at caret position in status line
+        - Confirm dialog before overwriting library code
+        - VIM: dont remove whitespace after word in 'cw' command
+        - (Ctrl+)Home/End keybindings
+        - Handle binary expressions
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
