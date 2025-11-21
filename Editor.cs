@@ -11,6 +11,7 @@ namespace StationeersIC10Editor
     using System.Collections.Generic;
     using System.Linq;
     using System;
+    using System.Text;
     using UnityEngine;
 
     using static Utils;
@@ -130,6 +131,7 @@ namespace StationeersIC10Editor
         public static float TooltipDelay => IC10EditorPlugin.TooltipDelay.Value;
         public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
         public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
+        public static int LineSpacingOffset => IC10EditorPlugin.LineSpacingOffset.Value;
 
         public static Vector2 buttonSize => Scale * new Vector2(85, 0);
         public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);
@@ -137,17 +139,30 @@ namespace StationeersIC10Editor
         public const string LimitExceededMessage = "Size limit exceeded: cannot save or export.";
 
 
+        private static float _lastScale = -1.0f;
+        private static float _lastLineSpacingOffset = -1.0f;
         private static float _charWidth = 0.0f;
         private static float _lineHeight = 0.0f;
+        private static float _lineSpacing = 0.0f;
         public static float CharWidth => _charWidth;
         public static float LineHeight => _lineHeight;
+        public static float LineSpacing => _lineSpacing;
 
         public static void UpdateTextSize()
         {
-            _charWidth = Mathf.Ceil(ImGui.CalcTextSize("M").x);
-            float spacing = ImGui.GetStyle().ItemSpacing.y;
-            float h = ImGui.GetFontSize();
-            _lineHeight = Mathf.Ceil(h+spacing - spacing/h);
+            if (Scale == _lastScale && LineSpacingOffset == _lastLineSpacingOffset)
+                return;
+
+            string s = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
+
+            var size = ImGui.CalcTextSize(s);
+
+            _lineHeight = Mathf.Ceil(size.y / 100.0f + LineSpacingOffset);
+            _charWidth = size.x / 100.0f;
+
+            _lineSpacing = ImGui.GetTextLineHeightWithSpacing() - ImGui.GetTextLineHeight() + LineSpacingOffset;
+            _lastScale = Scale;
+            _lastLineSpacingOffset = LineSpacingOffset;
         }
     }
 
@@ -1424,10 +1439,18 @@ namespace StationeersIC10Editor
         public unsafe void DrawCodeArea()
         {
             var padding = ImGui.GetStyle().FramePadding;
-            float scrollHeight = ImGui.GetContentRegionAvail().y - 2 * LineHeight - 2 * padding.y;
+            float scrollHeight = ImGui.GetContentRegionAvail().y - 2 * ImGui.GetTextLineHeightWithSpacing() - 2 * padding.y;
             ImGui.BeginChild("ScrollRegion", new Vector2(0, scrollHeight), true);
             _textAreaOrigin = ImGui.GetCursorScreenPos();
             _textAreaSize = ImGui.GetContentRegionAvail() + 2 * padding;
+
+            var linePos = _textAreaOrigin;
+            linePos.x += 4.3f * CharWidth;
+            ImGui.GetWindowDrawList().AddLine(
+                linePos,
+                new Vector2(linePos.x, linePos.y + LineHeight * Code.Length),
+                ICodeFormatter.ColorLineNumber,
+                1.5f);
 
             ImGuiListClipperPtr clipper = new ImGuiListClipperPtr(
                 ImGuiNative.ImGuiListClipper_ImGuiListClipper());
@@ -1464,21 +1487,30 @@ namespace StationeersIC10Editor
 
             _scrollY = ImGui.GetScrollY();
 
+            _firstLineIndex = -1;
+
             var selection = Selection.Sorted();
             while (clipper.Step())
             {
                 for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                 {
+                    var pos = ImGui.GetCursorScreenPos();
                     CodeFormatter.DrawLine(i, Lines[i], selection);
 
                     if (i == CaretLine)
                     {
-                        DrawCaret(_caretPixelPos);
-                        _caretPixelPos = ImGui.GetCursorScreenPos();
+                        _caretPixelPos = pos;
                         _caretPixelPos.x += CharWidth * (CaretCol + ICodeFormatter.LineNumberOffset);
+                        DrawCaret(_caretPixelPos);
                     }
-
-                    ImGui.NewLine();
+                    if (_firstLineIndex == -1)
+                    {
+                        _firstLineIndex = i;
+                        _firstLineY = pos.y;
+                    }
+                    pos.y += LineHeight;
+                    ImGui.SetCursorScreenPos(pos);
+                    // ImGui.NewLine();
                 }
             }
 
@@ -1492,14 +1524,17 @@ namespace StationeersIC10Editor
 
             clipper.End();
             ImGui.EndChild();
-
         }
 
         public void DrawCaret(Vector2 pos)
         {
             var drawList = ImGui.GetWindowDrawList();
-            var lineHeight = Mathf.Ceil(ImGui.GetTextLineHeight());
-            var lineHeight2 = LineHeight;
+            var height = LineHeight;
+            if (LineSpacingOffset < 0)
+            {
+                height = height - LineSpacingOffset;
+                pos.y -= LineSpacingOffset / 2;
+            }
 
             if (KeyHandler.Mode == KeyMode.Insert)
             {
@@ -1508,7 +1543,7 @@ namespace StationeersIC10Editor
                 {
                     drawList.AddLine(
                         pos,
-                        new Vector2(pos.x, pos.y + lineHeight2),
+                        new Vector2(pos.x, pos.y + height),
                         ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, 1)),
                         1.5f);
                 }
@@ -1517,12 +1552,12 @@ namespace StationeersIC10Editor
             {
                 // Draw a block cursor
                 drawList.AddRect(
-                    new Vector2(pos.x, pos.y),
-                    new Vector2(pos.x + CharWidth, pos.y + lineHeight2),
+                    new Vector2(pos.x - 1, pos.y - 1),
+                    new Vector2(pos.x + CharWidth, pos.y + height),
                     ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f)));
                 drawList.AddRect(
-                    new Vector2(pos.x - 1, pos.y - 1),
-                    new Vector2(pos.x + 1 + CharWidth, pos.y + lineHeight2 + 1),
+                    new Vector2(pos.x - 2, pos.y - 2),
+                    new Vector2(pos.x + 1 + CharWidth, pos.y + height + 1),
                     ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f)));
             }
         }
@@ -1662,10 +1697,7 @@ namespace StationeersIC10Editor
 
         public void CloseTab(int index = -1)
         {
-            L.Info("Closing tab " + index);
             index = index == -1 ? _activeTabIndex : index;
-            L.Info("Resolved index: " + index);
-            L.Info($"Have {Tabs.Count} tabs.");
             if (index <= 0 || index >= Tabs.Count)
                 return;
             if (Tabs.Count <= 1)
@@ -1704,14 +1736,16 @@ namespace StationeersIC10Editor
         private void DrawFloatOption(string label, ConfigEntry<float> entry, float min, float max)
         {
             var value = entry.Value;
+            ImGui.PushItemWidth(ImGui.CalcTextSize("000000.00").x);
+            if (ImGui.InputFloat(label, ref value))
+                entry.BoxedValue = value;
+            ImGui.PopItemWidth();
+            ImGui.SameLine();
             if (ImGui.Button("Reset"))
             {
                 entry.BoxedValue = 1.0f;
                 value = 1.0f;
             }
-            ImGui.SameLine();
-            if (ImGui.SliderFloat(label, ref value, min, max))
-                entry.BoxedValue = value;
         }
 
         private void DrawFloatOption(string label, ConfigEntry<float> entry)
@@ -1719,6 +1753,15 @@ namespace StationeersIC10Editor
             var value = entry.Value;
             ImGui.PushItemWidth(ImGui.CalcTextSize("000000.00").x);
             if (ImGui.InputFloat(label, ref value))
+                entry.BoxedValue = value;
+            ImGui.PopItemWidth();
+        }
+
+        private void DrawIntOption(string label, ConfigEntry<int> entry)
+        {
+            var value = entry.Value;
+            ImGui.PushItemWidth(ImGui.CalcTextSize("000000.00").x);
+            if (ImGui.InputInt(label, ref value, -20, 20))
                 entry.BoxedValue = value;
             ImGui.PopItemWidth();
         }
@@ -1742,6 +1785,7 @@ namespace StationeersIC10Editor
             DrawBoolOption("Enforce 128 Lines Limit", IC10EditorPlugin.EnforceLineLimit);
             DrawBoolOption("Enforce 4096 Bytes Limit", IC10EditorPlugin.EnforceByteLimit);
             DrawFloatOption("UI Scaling", IC10EditorPlugin.ScaleFactor, 0.25f, 5.0f);
+            DrawIntOption("Line Spacing Offset", IC10EditorPlugin.LineSpacingOffset);
             DrawFloatOption("Toolitp delay (ms)", IC10EditorPlugin.TooltipDelay);
             DrawBoolOption("VIM bindings", IC10EditorPlugin.VimBindings);
             DrawBoolOption("Auto Completion (insert with Tab key)", IC10EditorPlugin.EnableAutoComplete);
@@ -1832,7 +1876,6 @@ namespace StationeersIC10Editor
             maxRenderTime = (maxRenderTime * 1000000.0);
 
             ImGui.Text($"Render Time: {avgRenderTime:F0} us avg, {maxRenderTime:F0} us max");
-
             ImGui.Text($"ScrollY: {_scrollY:F2}");
             ImGui.Text($"Textpos: {_textAreaOrigin.x:F2}, {_textAreaOrigin.y:F2}, {_textAreaOrigin.y + _scrollY:F2}");
             ImGui.Text($"Textsize: {_textAreaSize.x:F2}, {_textAreaSize.y:F2}");
@@ -1841,10 +1884,10 @@ namespace StationeersIC10Editor
             ImGui.Text($"MousePos: {ImGui.GetMousePos().x:F2}, {ImGui.GetMousePos().y:F2}");
             ImGui.Text($"Mouse relative to text area: {ImGui.GetMousePos().x - _textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (_textAreaOrigin.y + _scrollY):F2}");
             ImGui.Text($"Mouse caret pos: {GetTextPositionFromMouse(false)}");
-            ImGui.Text($"font w/h: {CharWidth:F2}, {LineHeight:F2}");
             ImGui.Text($"Mouse line: {(ImGui.GetMousePos().y - _textAreaOrigin.y) / LineHeight:F2}");
             ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
             ImGui.Text($"Autocomplete suggestion: {CodeFormatter.GetAutocompleteSuggestion()}");
+            ImGui.Text($"Font w/h: {CharWidth:F2}, {LineHeight:F2}");
 
             if (_renderStopwatch != null)
             {
@@ -1857,13 +1900,15 @@ namespace StationeersIC10Editor
             ImGui.Separator();
         }
 
+        private int _firstLineIndex = -1;
+        private float _firstLineY = -1.0f;
         public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
         {
             Vector2 mousePos = ImGui.GetMousePos();
 
-            int line = (int)((mousePos.y - _textAreaOrigin.y) / LineHeight);
+            int line = (int)((mousePos.y + LineSpacing - _firstLineY) / LineHeight) + _firstLineIndex;
             int column =
-                (int)((mousePos.x - _textAreaOrigin.x) / CharWidth) - ICodeFormatter.LineNumberOffset;
+                (int)((mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset);
 
             if (!clampToTextArea && (line < 0 || line >= Lines.Count))
             {

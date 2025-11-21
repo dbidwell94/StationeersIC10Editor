@@ -86,6 +86,7 @@ namespace StationeersIC10Editor
                 ImGui
                     .GetWindowDrawList()
                     .AddText(pos, ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
+
                 pos.x += LineNumberOffset * CharWidth;
 
                 int selectionMin = -1,

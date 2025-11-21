@@ -51,14 +51,16 @@ namespace StationeersIC10Editor
         public static ConfigEntry<bool> EnableAutoComplete;
         public static ConfigEntry<float> ScaleFactor;
         public static ConfigEntry<float> TooltipDelay;
+        public static ConfigEntry<int> LineSpacingOffset;
 
         private void BindAllConfigs()
         {
-            VimBindings = Config.Bind("General", "Enable VIM bindings (experimental!)", false, "Enable VIM bindings, this is an experimental feature");
+            VimBindings = Config.Bind("General", "Enable VIM bindings (experimental!)", false, "Enable VIM bindings");
             EnforceLineLimit = Config.Bind("General", "Enforce 128 line limit", true, "Enforce the 128 line limit of IC10 programs");
             EnforceByteLimit = Config.Bind("General", "Enforce 4KB size limit", true, "Enforce the 4KB byte size of IC10 programs");
             PauseOnOpen = Config.Bind("General", "Pause game when IC10 editor is open", true, "Pause the game when the IC10 editor window is open");
             ScaleFactor = Config.Bind("General", "UI Scale Factor", 1.0f, "Scale factor for the IC10 editor UI");
+            LineSpacingOffset = Config.Bind("General", "Line Spacing Offset", 0, "Integer to increase/decrease line spacing");
             TooltipDelay = Config.Bind("General", "Tooltip Delay", 100f, "Delay in seconds before tooltips are shown");
             EnableAutoComplete = Config.Bind("General", "Autocompletion", true, "Enable autocompletion/suggestions (trigger with Tab key)");
         }

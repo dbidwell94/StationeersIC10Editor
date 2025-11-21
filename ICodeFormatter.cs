@@ -58,7 +58,7 @@ namespace StationeersIC10Editor
         public static uint ColorSelection = ColorFromHTML("#1a44b0ff");
         public static uint ColorNumber = ColorFromHTML("#20b2aa");
 
-        public const int LineNumberOffset = 5;
+        public const float LineNumberOffset = 5.3f;
 
         public abstract void ResetCode(string code);
         public abstract void RemoveLine(int index);
