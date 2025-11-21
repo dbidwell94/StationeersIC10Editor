@@ -22,7 +22,12 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - run: steamcmd +login anonymous +sDepotDownloadFileFilter "*.dll" +app_update 600760 -beta beta validate +quit
+      - run: |
+          for i in {1..8}; do
+            steamcmd +login anonymous +sDepotDownloadFileFilter "*.dll" +app_update 600760 validate +quit && break
+            echo "SteamCMD failed, retry #$i"
+            sleep 20
+          done
 
       - name: Checkout code
         uses: actions/checkout@v4
