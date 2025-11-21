@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.4.1</Version>
+  <Version>0.4.2</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -20,6 +20,7 @@
         - Register usage indicator
         - Auto completion
         - (optional) no line/size limit (use at your own risk, this might change or break with game updates)
+        - no size limit for libraries
 
         [b]Installation[/b]
         This is a [b]StationeersLaunchPad[/b] Plugin Mod. It requires BepInEx to be installed.
@@ -31,15 +32,11 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.4.1:
 
-        - Fix calculating caret position from mouse position when UI Scaling is
-          active
-        - Show error at caret position in status line
-        - Confirm dialog before overwriting library code
-        - VIM: dont remove whitespace after word in 'cw' command
-        - (Ctrl+)Home/End keybindings
-        - Handle binary expressions
+        0.4.2:
+
+        - Fix autocompete window position if scrolled down and cursor is at the bottom
+        - Fix line height calculation for fractional line heights
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
@@ -63,9 +60,15 @@ Custom IC10 editor with more features (and no lag!)
 - Save and close editor + export to IC chip with Ctrl+E
 - Multiline selection
 - Syntax highlighting
-- Tooltips for IC10 instructions
+- Errors checking
+- Tooltips for IC10 instructions and structure hashes
+- Ctrl+click on a name/hash to open Stationpedia
 - Switch to native editor
-- (Currently) no line/size limit (use at your own risk, this might change or break with game updates)
+- VIM bindings (see in-game help for supported commands)
+- Register usage indicator
+- Auto completion
+- (optional) no line/size limit (use at your own risk, this might change or break with game updates)
+- no size limit for libraries
 
 <b><color=#ffff00>Installation</color></b>
 This is a <color=#ffa500>StationeersLaunchPad</color> Plugin Mod. It requires BepInEx to be installed.
