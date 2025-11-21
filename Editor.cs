@@ -145,7 +145,9 @@ namespace StationeersIC10Editor
         public static void UpdateTextSize()
         {
             _charWidth = Mathf.Ceil(ImGui.CalcTextSize("M").x);
-            _lineHeight = Mathf.Ceil(ImGui.GetTextLineHeightWithSpacing());
+            float spacing = ImGui.GetStyle().ItemSpacing.y;
+            float h = ImGui.GetFontSize();
+            _lineHeight = Mathf.Ceil(h+spacing - spacing/h);
         }
     }
 
