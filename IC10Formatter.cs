@@ -64,7 +64,7 @@ namespace StationeersIC10Editor
 
             public override void DrawStatus(IEditor ed, TextPosition caret)
             {
-                var status = GetTokenAtPosition(caret, out int index)?.Tooltip;
+                var status = Code[caret.Line].GetStatusText(caret.Col);
                 if (!string.IsNullOrEmpty(status))
                 {
                     var color = status.StartsWith("Error") ? ColorError : ColorWarning;
@@ -75,7 +75,6 @@ namespace StationeersIC10Editor
                     ImGui.SameLine();
                 }
                 DrawRegistersGrid();
-                return;
             }
 
             public override void DrawLine(int lineIndex, string line, TextRange selection = default)
@@ -574,7 +573,7 @@ namespace StationeersIC10Editor
                     width = Math.Max(ImGui.CalcTextSize(suggestion).x, width);
 
                 var completeSize = new Vector2(10.0f + width, 5.0f + LineHeight * (suggestions.Count + (n > maxSuggestions ? 1 : 0)));
-                float bottomSize = ImGui.GetContentRegionAvail().y - LineHeight;
+                float bottomSize = ImGui.GetContentRegionAvail().y - LineHeight - 5.0f + ImGui.GetScrollY();
                 if (bottomSize < completeSize.y)
                 {
                     pos.y -= completeSize.y - bottomSize;
@@ -614,22 +613,7 @@ namespace StationeersIC10Editor
                     return null;
 
                 var codeLine = Code[caret.Line];
-                IC10Token tokenAtCaret = null;
-                for (int i = 0; i < codeLine.Count; i++)
-                {
-                    var token = codeLine[i];
-                    if (caret.Col < token.Column)
-                        break;
-
-                    if (caret.Col >= token.Column && caret.Col < token.Column + token.Text.Length)
-                    {
-                        tokenAtCaret = token;
-                        tokenIndex = i;
-                        break;
-                    }
-                }
-
-                return tokenAtCaret;
+                return codeLine.GetTokenAtColumn(caret.Col, out tokenIndex);
             }
 
             public override bool DrawTooltip(string line, TextPosition caret, Vector2 pos)

@@ -562,6 +562,35 @@ namespace StationeersIC10Editor
                 }
             }
 
+            public IC10Token GetTokenAtColumn(int caretCol, out int tokenIndex)
+            {
+                tokenIndex = -1;
+                for (int i = 0; i < NumCodeTokens; i++)
+                {
+                    var token = this[i];
+                    if (caretCol >= token.Column && caretCol < token.Column + token.Text.Length)
+                    {
+                        tokenIndex = i;
+                        return token;
+                    }
+                }
+                return null;
+            }
+
+            public string GetStatusText(int caretCol)
+            {
+                if (NumCodeTokens == 0)
+                    return String.Empty;
+
+                var token = GetTokenAtColumn(caretCol, out int tokenIndex);
+                var status = token != null ? token.Tooltip : String.Empty;
+
+                if (string.IsNullOrEmpty(status) && this[0].IsInstruction)
+                    status = this[0].Tooltip;
+
+                return status;
+            }
+
             public static bool IsDeviceChannel(string text)
             {
                 if (!text.Contains(":"))
