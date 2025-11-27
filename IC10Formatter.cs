@@ -12,6 +12,11 @@ namespace StationeersIC10Editor
         public class IC10CodeFormatter : ICodeFormatter
         {
 
+            virtual public string TrimToken(string token)
+            {
+                return token.TrimEnd(':');
+            }
+
 
             private void DrawRegistersGrid()
             {
@@ -20,7 +25,7 @@ namespace StationeersIC10Editor
                 for (int i = 0; i < 16; i++)
                     registers[i] = false;
 
-                foreach (var line in Code)
+                foreach (var line in Lines)
                     foreach (var token in line)
                         if (IC10Utils.Registers.Contains(token.Text) && token.Text.StartsWith("r") && token.Text != "ra")
                         {
@@ -62,76 +67,76 @@ namespace StationeersIC10Editor
                 }
             }
 
-            public override void DrawStatus(IEditor ed, TextPosition caret)
-            {
-                var status = Code[caret.Line].GetStatusText(caret.Col);
-                if (!string.IsNullOrEmpty(status))
-                {
-                    var color = status.StartsWith("Error") ? ColorError : ColorWarning;
-                    ImGui.SameLine();
-                    ImGui.PushStyleColor(ImGuiCol.Text, color);
-                    ImGui.Text(status);
-                    ImGui.PopStyleColor();
-                    ImGui.SameLine();
-                }
-                DrawRegistersGrid();
-            }
-
-            public override void DrawLine(int lineIndex, string line, TextRange selection = default)
-            {
-                if (lineIndex < 0 || lineIndex >= Code.Count)
-                    return;
-                var tokens = Code[lineIndex];
-                Vector2 pos = ImGui.GetCursorScreenPos();
-                ImGui
-                    .GetWindowDrawList()
-                    .AddText(pos, ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
-
-                pos.x += LineNumberOffset * CharWidth;
-
-                int selectionMin = -1,
-                    selectionMax = -1;
-
-                foreach (var token in tokens)
-                    if (token.Background != 0)
-                    {
-                        var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
-                        ImGui.GetWindowDrawList().AddRectFilled(
-                            tokenPos,
-                            new Vector2(tokenPos.x + CharWidth * token.Text.Length,
-                                        tokenPos.y + LineHeight),
-                            token.Background);
-                    }
-
-                if (selection)
-                {
-                    if (selection.Start.Line <= lineIndex && selection.End.Line >= lineIndex)
-                    {
-                        selectionMin = lineIndex == selection.Start.Line ? selection.Start.Col : 0;
-                        selectionMax =
-                            lineIndex == selection.End.Line ? selection.End.Col : line.Length;
-
-                        selectionMin = Mathf.Clamp(selectionMin, 0, line.Length);
-                        selectionMax = Mathf.Clamp(selectionMax, 0, line.Length);
-
-                        Vector2 selStart = new Vector2(pos.x + (CharWidth * selectionMin), pos.y);
-                        Vector2 selEnd = new Vector2(
-                            pos.x + (CharWidth * selectionMax),
-                            pos.y + LineHeight);
-
-                        ImGui
-                            .GetWindowDrawList()
-                            .AddRectFilled(selStart, selEnd, ColorSelection);
-                    }
-                }
-
-                foreach (var token in tokens)
-                {
-                    var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
-                    ImGui.GetWindowDrawList().AddText(tokenPos, token.Color, token.Text);
-                }
-
-            }
+            // public override void DrawStatus(IEditor ed, TextPosition caret)
+            // {
+            //     var status = Lines[caret.Line].GetStatusText(caret.Col);
+            //     if (!string.IsNullOrEmpty(status))
+            //     {
+            //         var color = status.StartsWith("Error") ? ColorError : ColorWarning;
+            //         ImGui.SameLine();
+            //         ImGui.PushStyleColor(ImGuiCol.Text, color);
+            //         ImGui.Text(status);
+            //         ImGui.PopStyleColor();
+            //         ImGui.SameLine();
+            //     }
+            //     DrawRegistersGrid();
+            // }
+            //
+            // public override void DrawLine(int lineIndex, string line, TextRange selection = default)
+            // {
+            //     if (lineIndex < 0 || lineIndex >= Lines.Count)
+            //         return;
+            //     var tokens = Lines[lineIndex];
+            //     Vector2 pos = ImGui.GetCursorScreenPos();
+            //     ImGui
+            //         .GetWindowDrawList()
+            //         .AddText(pos, ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
+            //
+            //     pos.x += LineNumberOffset * CharWidth;
+            //
+            //     int selectionMin = -1,
+            //         selectionMax = -1;
+            //
+            //     foreach (var token in tokens)
+            //         if (token.Background != 0)
+            //         {
+            //             var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
+            //             ImGui.GetWindowDrawList().AddRectFilled(
+            //                 tokenPos,
+            //                 new Vector2(tokenPos.x + CharWidth * token.Text.Length,
+            //                             tokenPos.y + LineHeight),
+            //                 token.Background);
+            //         }
+            //
+            //     if (selection)
+            //     {
+            //         if (selection.Start.Line <= lineIndex && selection.End.Line >= lineIndex)
+            //         {
+            //             selectionMin = lineIndex == selection.Start.Line ? selection.Start.Col : 0;
+            //             selectionMax =
+            //                 lineIndex == selection.End.Line ? selection.End.Col : line.Length;
+            //
+            //             selectionMin = Mathf.Clamp(selectionMin, 0, line.Length);
+            //             selectionMax = Mathf.Clamp(selectionMax, 0, line.Length);
+            //
+            //             Vector2 selStart = new Vector2(pos.x + (CharWidth * selectionMin), pos.y);
+            //             Vector2 selEnd = new Vector2(
+            //                 pos.x + (CharWidth * selectionMax),
+            //                 pos.y + LineHeight);
+            //
+            //             ImGui
+            //                 .GetWindowDrawList()
+            //                 .AddRectFilled(selStart, selEnd, ColorSelection);
+            //         }
+            //     }
+            //
+            //     foreach (var token in tokens)
+            //     {
+            //         var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
+            //         ImGui.GetWindowDrawList().AddText(tokenPos, token.Color, token.Text);
+            //     }
+            //
+            // }
 
             public static uint GetBackgroundColor(IC10Token token)
             {
@@ -200,19 +205,6 @@ namespace StationeersIC10Editor
             private Dictionary<string, int> devAliases = new Dictionary<string, int>();
             private Dictionary<string, int> labels = new Dictionary<string, int>();
 
-            private List<IC10Line> Code = new List<IC10Line>();
-
-
-            static IC10CodeFormatter()
-            {
-                CodeFormatters.RegisterFormatter("IC10", () => new IC10CodeFormatter());
-            }
-
-            public IC10CodeFormatter()
-            {
-                Code = new List<IC10Line>();
-            }
-
             public static int FindNextWhitespace(string text, int startIndex)
             {
                 bool haveQuote = false;
@@ -234,7 +226,7 @@ namespace StationeersIC10Editor
                 return startIndex;
             }
 
-            public IC10Line ParseIC10Line(string text)
+            public override Line ParseLine(string text)
             {
                 if (string.IsNullOrEmpty(text))
                     return new IC10Line();
@@ -264,7 +256,7 @@ namespace StationeersIC10Editor
 
                     tokens.Add(new IC10Token(
                         token,
-                        (uint)start,
+                        start,
                         0));
 
                     i = end;
@@ -273,10 +265,15 @@ namespace StationeersIC10Editor
                 if (!string.IsNullOrEmpty(comment))
                     tokens.Add(new IC10Token(
                         comment,
-                        (uint)indexOfComment,
+                        indexOfComment,
                         ColorComment));
 
                 tokens.SetTypes(types);
+
+                foreach (IC10Token token in tokens)
+                {
+                    L.Debug($"Parsed token: {token.Text}, column: {token.Column}, color: {token.Color}, datatype: {token.DataType}, error: {token.Error}, tooltip: {token.Tooltip}, status: {token.Status}");
+                }
 
                 return tokens;
             }
@@ -289,7 +286,7 @@ namespace StationeersIC10Editor
                 regAliases.Clear();
                 devAliases.Clear();
                 labels.Clear();
-                Code.Clear();
+                Lines.Clear();
 
                 var lines = code.Split('\n');
                 foreach (var line in lines)
@@ -348,7 +345,7 @@ namespace StationeersIC10Editor
                 }
                 types[token] = type;
 
-                foreach (var line in Code)
+                foreach (IC10Line line in Lines)
                     line.SetTypes(types);
             }
 
@@ -384,15 +381,15 @@ namespace StationeersIC10Editor
 
             public override void AppendLine(string line)
             {
-                InsertLine(Code.Count, line);
+                InsertLine(Lines.Count, line);
             }
 
             public override void InsertLine(int index, string line)
             {
-                L.Debug($"Formatter: insert line at index {index}/{Code.Count}, text: '{line}'");
-                var ic10line = ParseIC10Line(line);
+                L.Debug($"Formatter: insert line at index {index}/{Lines.Count}, text: '{line}'");
+                var ic10line = ParseLine(line) as IC10Line;
 
-                Code.Insert(index, ic10line);
+                Lines.Insert(index, ic10line);
 
                 if (ic10line.IsLabel)
                     AddDictEntry(labels, TrimToken(ic10line[0].Text), DataType.Label);
@@ -406,9 +403,9 @@ namespace StationeersIC10Editor
 
             public override void RemoveLine(int index)
             {
-                L.Debug($"Formatter: removing line at index {index}/{Code.Count}");
-                var line = Code[index];
-                Code.RemoveAt(index);
+                L.Debug($"Formatter: removing line at index {index}/{Lines.Count}");
+                var line = Lines[index] as IC10Line;
+                Lines.RemoveAt(index);
 
                 if (line.Count == 0)
                     return;
@@ -423,89 +420,99 @@ namespace StationeersIC10Editor
                     RemoveDictEntry(defines, line[1].Text, DataType.Number);
             }
 
-            public static void DrawColoredText(List<ColoredTextSegment> input)
-            {
-                var pos = ImGui.GetCursorScreenPos();
-                var list = ImGui.GetWindowDrawList();
-                foreach (var segment in input)
-                    list.AddText(
-                        pos + segment.Pos,
-                        segment.Color,
-                        segment.Text);
-            }
+            // public static void DrawColoredText(List<ColoredTextSegment> input)
+            // {
+            //     var pos = ImGui.GetCursorScreenPos();
+            //     var list = ImGui.GetWindowDrawList();
+            //     foreach (var segment in input)
+            //         list.AddText(
+            //             pos + segment.Pos,
+            //             segment.Color,
+            //             segment.Text);
+            // }
+            //
+            // public static void ParseAndDrawColoredText(string input)
+            // {
+            //     float width = 0.0f;
+            //     DrawColoredText(ParseColoredText(input, ref width));
+            // }
 
-            public static void ParseAndDrawColoredText(string input)
+            public static FormattedText ParseColoredText(string input, ref float width)
             {
-                float width = 0.0f;
-                DrawColoredText(ParseColoredText(input, ref width));
-            }
+                var result = new FormattedText();
 
-            public static List<ColoredTextSegment> ParseColoredText(string input, ref float width)
-            {
-                var result = new List<ColoredTextSegment>();
-                var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
-                int lastIndex = 0;
-                Vector2 pos = new Vector2(0, 0);
+                var lines = input.Split('\n');
 
-                foreach (Match match in regex.Matches(input))
+                var C = (string color) => ColorFromHTML(color);
+
+                foreach (var line in lines)
                 {
-                    if (match.Index > lastIndex)
+                    var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
+                    int lastIndex = 0;
+                    int column = 0;
+                    var resultLine = new Line();
+
+                    foreach (Match match in regex.Matches(line))
                     {
-                        string rawText = input.Substring(lastIndex, match.Index - lastIndex);
-                        if (!string.IsNullOrEmpty(rawText.Trim()))
-                            result.Add(new ColoredTextSegment("#ffffff", rawText, pos));
-                        pos.x += ImGui.CalcTextSize(rawText).x;
+                        if (match.Index > lastIndex)
+                        {
+                            string rawText = input.Substring(lastIndex, match.Index - lastIndex);
+                            if (!string.IsNullOrEmpty(rawText.Trim()))
+                                resultLine.Add(new Token(rawText, column, C("#ffffff")));
+                            column += rawText.Length;
+                        }
+
+                        string color = match.Groups[1].Value;
+                        string text = match.Groups[2].Value;
+                        if (!string.IsNullOrEmpty(text.Trim()))
+                            resultLine.Add(new Token(text, column, C(color)));
+                        column += text.Length;
+
+                        lastIndex = match.Index + match.Length;
                     }
 
-                    string color = match.Groups[1].Value;
-                    string text = match.Groups[2].Value;
-                    if (!string.IsNullOrEmpty(text.Trim()))
-                        result.Add(new ColoredTextSegment(color, text, pos));
-                    pos.x += ImGui.CalcTextSize(text).x;
-
-                    lastIndex = match.Index + match.Length;
+                    if (lastIndex < input.Length)
+                    {
+                        var rawText = input.Substring(lastIndex);
+                        if (!string.IsNullOrEmpty(rawText.Trim()))
+                            resultLine.Add(new Token(rawText, column, C("#ffffff")));
+                        column += rawText.Length;
+                    }
+                    result.Add(resultLine);
                 }
 
-                if (lastIndex < input.Length)
-                {
-                    var rawText = input.Substring(lastIndex);
-                    if (!string.IsNullOrEmpty(rawText.Trim()))
-                        result.Add(new ColoredTextSegment("#ffffff", rawText, pos));
-                    pos.x += ImGui.CalcTextSize(input.Substring(lastIndex)).x;
-                }
-
-                width = pos.x;
 
                 return result;
             }
 
             private string _suggestion = null;
 
-            public override string GetAutocompleteSuggestion()
+            public string xxxGetAutocompleteSuggestion()
             {
                 return _suggestion;
             }
 
-            public override void DrawAutocomplete(IEditor ed, TextPosition caret, Vector2 pos)
+            public void xxxDrawAutocomplete(IEditor ed, TextPosition caret, Vector2 pos)
             {
                 if (ed.KeyMode != KeyMode.Insert)
                     return;
 
                 _suggestion = null;
-                if (!ed.IsWordEnd(caret) && caret.Col < Code[caret.Line].Length)
+                if (!ed.IsWordEnd(caret) && caret.Col < Lines[caret.Line].Length)
                     return;
 
                 if (char.IsWhiteSpace(ed[caret]))
                     caret.Col--;
 
-                var token = GetTokenAtPosition(caret, out int index);
+                var token = Lines.GetTokenAtPosition(caret) as IC10Token;
                 if (token == null)
                     return;
 
                 // if (string.IsNullOrEmpty(token.Tooltip))
                 //     return;
 
-                var line = Code[caret.Line];
+                var line = Lines[caret.Line] as IC10Line;
+                var index = line.IndexOf(token);
                 if (index > 0 && !line[0].IsInstruction)
                     return;
 
@@ -607,54 +614,64 @@ namespace StationeersIC10Editor
                 }
             }
 
-            public IC10Token GetTokenAtPosition(TextPosition caret, out int tokenIndex)
+            public override void UpdateStatus()
             {
-                tokenIndex = -1;
-                if (caret.Line < 0 || caret.Line >= Code.Count)
-                    return null;
+                if (CaretPos.Line < 0 || CaretPos.Line >= Lines.Count)
+                    return;
 
-                var codeLine = Code[caret.Line];
-                return codeLine.GetTokenAtColumn(caret.Col, out tokenIndex);
+                var tokenAtCaret = Lines.GetTokenAtPosition(CaretPos) as IC10Token;
+
+                if (tokenAtCaret == null && Lines[CaretPos.Line].Count > 0)
+                    tokenAtCaret = Lines[0][0] as IC10Token;
+
+                if (tokenAtCaret == null)
+                    return;
+
+                var statusLine = new Line();
+
+                if (tokenAtCaret?.Error != null)
+                    statusLine.Add(new Token(tokenAtCaret.Error, 0, ICodeFormatter.ColorError));
+                else if (tokenAtCaret?.Status != null)
+                    statusLine.Add(new Token(tokenAtCaret.Status, 0, ICodeFormatter.ColorDefault));
+                else if (tokenAtCaret?.Tooltip != null)
+                    statusLine.Add(new Token(tokenAtCaret.Tooltip, 0, ICodeFormatter.ColorDefault));
+
+                _status = new FormattedText();
+                _status.Add(statusLine);
             }
 
-            public override bool DrawTooltip(string line, TextPosition caret, Vector2 pos)
+            public override void UpdateTooltip(TextPosition mouseTextPos)
             {
-                var tokenAtCaret = GetTokenAtPosition(caret, out int index);
+                _tooltip = null;
 
-                if (tokenAtCaret == null || !tokenAtCaret.IsInstruction && string.IsNullOrEmpty(tokenAtCaret.Tooltip))
-                    return false;
+                if (!(bool)mouseTextPos)
+                    return;
 
-                List<ColoredTextSegment> instructionHeader = new List<ColoredTextSegment>();
-                List<ColoredTextSegment> instructionExample = new List<ColoredTextSegment>();
-                float width = 0.0f;
+                var token = Lines.GetTokenAtPosition(mouseTextPos) as IC10Token;
 
-                if (tokenAtCaret.Tooltip != null)
+                if (token == null)
+                    return;
+
+                var tooltip = new FormattedText();
+
+                if (!string.IsNullOrEmpty(token?.Error))
+                    tooltip.Add(new Line(token.Error, ColorError));
+
+                if (!string.IsNullOrEmpty(token?.Tooltip))
+                    tooltip.Add(new Line(token.Tooltip));
+
+                if (token.IsInstruction)
                 {
-                    float w = ImGui.CalcTextSize(tokenAtCaret.Tooltip).x + 20.0f;
-                    width = Math.Min(w, 500.0f);
+                    if (tooltip.Count > 0)
+                        tooltip.Add(new Line(""));
+                    tooltip.AddRange(IC10Utils.Instructions[token.Text].Tooltip);
                 }
 
-                if (tokenAtCaret.IsInstruction)
-                {
-                    var instruction = tokenAtCaret.Text;
-                    var command = IC10Utils.Instructions[instruction];
-                    width = Math.Max(command.TooltipWidth, width);
-                }
+                _tooltip = tooltip;
+            }
 
-                ImGui.SetNextWindowSize(new Vector2(width, 0));
-                ImGui.BeginTooltip();
-
-                if (string.IsNullOrEmpty(tokenAtCaret.Tooltip) == false)
-                {
-                    ImGui.TextWrapped(tokenAtCaret.Tooltip);
-                    if (tokenAtCaret.IsInstruction)
-                        ImGui.Separator();
-                }
-                if (tokenAtCaret.IsInstruction)
-                    IC10Utils.Instructions[tokenAtCaret.Text].DrawTooltip();
-                ImGui.EndTooltip();
-
-                return false;
+            public override void UpdateAutocomplete()
+            {
             }
         }
     }

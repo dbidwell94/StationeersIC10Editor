@@ -414,22 +414,20 @@ namespace StationeersIC10Editor
             public List<ArgType> ArgumentTypes = new List<ArgType>();
             public bool IsBuiltin = true;
 
-            public float TooltipWidth = 0.0f;
-            public List<ColoredTextSegment> TooltipHeader = new List<ColoredTextSegment>();
-            public List<ColoredTextSegment> TooltipExample = new List<ColoredTextSegment>();
-
+            public FormattedText Tooltip = new FormattedText();
 
             public IC10OpCode(string name, string description, string example)
             {
+                L.Info($"Defining opcode {name}, description: {description}, example: {example}");
                 IsBuiltin = true;
                 Name = name;
                 Description = description;
                 float w = 0.0f;
                 float wmax = 0.0f;
-                TooltipHeader = IC10CodeFormatter.ParseColoredText($"Instruction: <color=yellow>{name}</color>", ref wmax);
-                TooltipExample = IC10CodeFormatter.ParseColoredText($"    {example}", ref w);
+                FormattedText TooltipHeader = IC10CodeFormatter.ParseColoredText($"Instruction: <color=yellow>{name}</color>", ref wmax);
+                Line TooltipExample = IC10CodeFormatter.ParseColoredText($"    {example}", ref w)[0];
+                L.Info($"Parsed example line with width {w}, Count={TooltipExample.Count}");
                 wmax = Math.Max(wmax, w);
-                TooltipWidth = Math.Max(w + 40, 500.0f);
 
                 int i = 1;
                 while (i < TooltipExample.Count)
@@ -498,35 +496,40 @@ namespace StationeersIC10Editor
 
                     ArgumentTypes.Add(argType);
                 }
-            }
 
-            public void DrawTooltip()
-            {
-                IC10CodeFormatter.DrawColoredText(TooltipHeader);
-                ImGui.NewLine();
-                IC10CodeFormatter.DrawColoredText(TooltipExample);
-                ImGui.NewLine();
-                ImGui.NewLine();
-                ImGui.TextWrapped(Description);
+                Tooltip = new FormattedText();
+                Tooltip.AddRange(TooltipHeader);
+                Tooltip.Add(new Line(""));
+                Tooltip.Add(TooltipExample);
+                Tooltip.Add(new Line(""));
+                var descriptionLine = new Line();
+                int column = 0;
+                foreach (var word in Description.Split(' '))
+                {
+                    if (column + word.Length > 70)
+                    {
+                        Tooltip.Add(descriptionLine);
+                        descriptionLine = new Line();
+                        column = 0;
+                    }
+                    descriptionLine.Add(new Token(word, column));
+                    column += word.Length + 1;
+                }
             }
         }
 
-        public class IC10Token
+        public class IC10Token : Token
         {
 
-            public string Text;
-            public uint Column;
-            public uint Color;
-            public uint Background;
             public DataType DataType;
-            public string Tooltip;
 
             public bool IsComment => Text.StartsWith("#");
             public bool IsLabel => Text.EndsWith(":");
 
             public bool IsInstruction => IC10Utils.Instructions.ContainsKey(Text);
 
-            public IC10Token(string text, uint column, uint color = 0, uint background = 0)
+            public IC10Token(string text, int column, uint color = 0, uint background = 0)
+              : base(text, column, color, background)
             {
                 Column = column;
                 Text = text;
@@ -538,9 +541,13 @@ namespace StationeersIC10Editor
         }
 
 
-        public class IC10Line : List<IC10Token>
+        public class IC10Line : Line
         {
-            public int Length => this.Count == 0 ? 0 : (int)(this[Count - 1].Column + this[Count - 1].Text.Length);
+            new public IC10Token this[int index]
+            {
+                get { return (IC10Token)base[index]; }
+                set { base[index] = value; }
+            }
 
             public bool IsLabel => NumCodeTokens == 1 && this[0].IsLabel;
             public bool IsAlias => NumCodeTokens == 3 && this[0].DataType == DataType.Alias;
@@ -633,7 +640,7 @@ namespace StationeersIC10Editor
 
             public void SetTypes(Dictionary<string, DataType> types)
             {
-                foreach (var token in this)
+                foreach (IC10Token token in this)
                 {
                     token.Tooltip = String.Empty;
 
@@ -666,6 +673,7 @@ namespace StationeersIC10Editor
 
                     token.Color = IC10CodeFormatter.GetColor(token);
                     token.Background = IC10CodeFormatter.GetBackgroundColor(token);
+                    L.Info($"Token '{token.Text}' assigned type {token.DataType}, color {token.Color:X8}");
                 }
 
                 if (IsInstruction)
@@ -676,12 +684,12 @@ namespace StationeersIC10Editor
                     if (arguments.Count != NumCodeTokens - 1)
                     {
                         this[0].Color = ICodeFormatter.ColorError;
-                        this[0].Tooltip += $"Error: expected {arguments.Count} arguments, got {NumCodeTokens - 1}\n";
+                        this[0].Error += $"Expected {arguments.Count} arguments, got {NumCodeTokens - 1}\n";
 
                         for (int i = arguments.Count + 1; i < NumCodeTokens; i++)
                         {
                             this[i].Color = ICodeFormatter.ColorError;
-                            this[i].Tooltip += this[0].Tooltip;
+                            this[i].Error += this[0].Error;
                         }
                     }
                     for (int i = 0; i < Math.Min(arguments.Count, NumCodeTokens - 1); i++)
@@ -694,7 +702,7 @@ namespace StationeersIC10Editor
                         {
                             this[i + 1].Color = ICodeFormatter.ColorError;
                             string expectedTypeStr = arguments[i].Description;
-                            this[i + 1].Tooltip += $"Error: invalid argument type {actualType.Description}, expected {expectedTypeStr}";
+                            this[i + 1].Error += $"Invalid argument type {actualType.Description}, expected {expectedTypeStr}";
                         }
                     }
                 }
@@ -703,7 +711,7 @@ namespace StationeersIC10Editor
                     if (NumCodeTokens > 0 && !IsLabel && !IsAlias && !IsDefine && !this[0].IsComment)
                     {
                         this[0].Color = ICodeFormatter.ColorError;
-                        this[0].Tooltip += $"Error: unknown instruction '{this[0].Text}'\n";
+                        this[0].Error += $"Unknown instruction '{this[0].Text}'\n";
                     }
                 }
             }

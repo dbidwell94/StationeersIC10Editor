@@ -288,7 +288,7 @@ namespace StationeersIC10Editor
                     break;
                 case "c":
                 case "C":
-                    if(Command == "c" && Movement == 'w' && range.End.Col > 0)
+                    if (Command == "c" && Movement == 'w' && range.End.Col > 0)
                         range.End.Col--;
                     Handler.InsertMode();
                     editor.DeleteRange(range, false);
@@ -817,11 +817,12 @@ namespace StationeersIC10Editor
                 char c = (char)io.InputQueueCharacters[i];
                 if (c == '\t')
                 {
-                    string suggestion = EnableAutoComplete ? Editor.CodeFormatter.GetAutocompleteSuggestion() : null;
-                    if (suggestion == null)
-                        input += "  ";
-                    else
-                        input += suggestion;
+                    // todo
+                    // string suggestion = EnableAutoComplete ? Editor.CodeFormatter.GetAutocompleteSuggestion() : null;
+                    // if (suggestion == null)
+                    //     input += "  ";
+                    // else
+                    //     input += suggestion;
                 }
                 else
                     input += c;

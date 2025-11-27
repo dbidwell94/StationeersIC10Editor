@@ -207,7 +207,7 @@ namespace StationeersIC10Editor
             Lines = new List<string>();
             Lines.Add("");
             CaretPos = new TextPosition(0, 0);
-            CodeFormatter.AppendLine("");
+            CodeFormatter.ResetCode("");
         }
 
         public TextPosition CaretPos
@@ -883,11 +883,12 @@ namespace StationeersIC10Editor
         {
             if (PCM)
             {
+                var code = CodeFormatter.Compile();
                 if (LimitExceeded)
                 {
                     return LimitExceededMessage;
                 }
-                PCM.InputFinished(Code);
+                PCM.InputFinished(code);
                 return "Saved to Motherboard";
             }
             if (InstructionData != null)
@@ -903,6 +904,7 @@ namespace StationeersIC10Editor
             }
             return "Error: No target to save to.";
         }
+
     }
 
     public class EditorWindow
@@ -1292,14 +1294,32 @@ namespace StationeersIC10Editor
 
             ImGui.SameLine();
 
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 4 * smallButtonSize.x - buttonSize.x - ImGui.GetStyle().FramePadding.x * 4 - ImGui.GetStyle().ItemSpacing.x * 4);
+            float comboWidth = 130;
+
+            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - comboWidth - 3 * smallButtonSize.x - buttonSize.x - ImGui.GetStyle().FramePadding.x * 4 - ImGui.GetStyle().ItemSpacing.x * 3);
 
             bool isIC10 = ActiveTab.CodeFormatter as IC10.IC10CodeFormatter != null;
-            if (ImGui.Button(isIC10 ? "IC10" : "txt"))
+
+            var formatters = CodeFormatters.FormatterNames;
+            var formatter = ActiveTab.CodeFormatter;
+
+            ImGui.PushItemWidth(comboWidth);
+            if (ImGui.BeginCombo("##CodeFormat", formatter.Name))
             {
-                ActiveTab.CodeFormatter = CodeFormatters.GetFormatter(isIC10 ? "Plain" : "IC10");
-                ActiveTab.CodeFormatter.ResetCode(ActiveTab.Code);
+                foreach (var fmt in formatters)
+                {
+                    bool isSelected = fmt == formatter.Name;
+                    if (ImGui.Selectable(fmt, isSelected))
+                    {
+                        ActiveTab.CodeFormatter = CodeFormatters.GetFormatter(fmt);
+                        ActiveTab.CodeFormatter.ResetCode(ActiveTab.Code);
+                    }
+                    if (isSelected)
+                        ImGui.SetItemDefaultFocus();
+                }
+                ImGui.EndCombo();
             }
+            ImGui.PopItemWidth();
 
             ImGui.SameLine();
 
@@ -1414,7 +1434,7 @@ namespace StationeersIC10Editor
             }
 
             KeyHandler.DrawStatus();
-            CodeFormatter.DrawStatus(ActiveTab, CaretPos);
+            CodeFormatter.DrawStatus(ImGui.GetCursorScreenPos());
 
             ImGui.PopStyleVar();
         }
@@ -1438,6 +1458,7 @@ namespace StationeersIC10Editor
 
         public unsafe void DrawCodeArea()
         {
+            CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
             var padding = ImGui.GetStyle().FramePadding;
             float scrollHeight = ImGui.GetContentRegionAvail().y - 2 * ImGui.GetTextLineHeightWithSpacing() - 2 * padding.y;
             ImGui.BeginChild("ScrollRegion", new Vector2(0, scrollHeight), true);
@@ -1495,7 +1516,7 @@ namespace StationeersIC10Editor
                 for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                 {
                     var pos = ImGui.GetCursorScreenPos();
-                    CodeFormatter.DrawLine(i, Lines[i], selection);
+                    CodeFormatter.DrawLine(i, selection);
 
                     if (i == CaretLine)
                     {
@@ -1519,7 +1540,7 @@ namespace StationeersIC10Editor
                 var completePos = _caretPixelPos + new Vector2(0, 1.5f * LineHeight);
                 ImGui.SetCursorScreenPos(_caretPixelPos);
 
-                CodeFormatter.DrawAutocomplete(ActiveTab, CaretPos, completePos);
+                // todo CodeFormatter.DrawAutocomplete(ActiveTab, CaretPos, completePos);
             }
 
             clipper.End();
@@ -1683,8 +1704,7 @@ namespace StationeersIC10Editor
                 if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
                 {
                     var pos = GetTextPositionFromMouse(false);
-                    if (pos)
-                        CodeFormatter.DrawTooltip(Lines[CaretLine], pos, _caretPixelPos);
+                    if (pos) CodeFormatter.DrawTooltip(ImGui.GetMousePos());
                 }
                 ImGui.PopFont();
             }
@@ -1886,7 +1906,7 @@ namespace StationeersIC10Editor
             ImGui.Text($"Mouse caret pos: {GetTextPositionFromMouse(false)}");
             ImGui.Text($"Mouse line: {(ImGui.GetMousePos().y - _textAreaOrigin.y) / LineHeight:F2}");
             ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
-            ImGui.Text($"Autocomplete suggestion: {CodeFormatter.GetAutocompleteSuggestion()}");
+            // ImGui.Text($"Autocomplete suggestion: {CodeFormatter.GetAutocompleteSuggestion()}");
             ImGui.Text($"Font w/h: {CharWidth:F2}, {LineHeight:F2}");
 
             if (_renderStopwatch != null)
