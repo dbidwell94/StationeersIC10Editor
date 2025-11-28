@@ -81,6 +81,7 @@ namespace StationeersIC10Editor
     public class EditorState
     {
         public string Code;
+        public FormattedText FormattedText;
         public TextPosition CaretPos;
         public double Timestamp;
         public bool Mergeable;
@@ -261,13 +262,14 @@ namespace StationeersIC10Editor
         {
             get
             {
-                return new EditorState { Code = Code, CaretPos = CaretPos, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+                return new EditorState { Code = Code, FormattedText = CodeFormatter.Lines, CaretPos = CaretPos, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
             }
 
             set
             {
-                ResetCode(value.Code, false);
+                CodeFormatter.Lines = value.FormattedText;
                 CaretPos = value.CaretPos;
+                _isCodeChanged = true;
             }
         }
 
@@ -721,13 +723,9 @@ namespace StationeersIC10Editor
             if (!(bool)range)
                 return false;
 
-            L.Info("DeleteRange: " + range.ToString());
-
             range = range.Sorted();
             bool removeLast = range.End.Col > Lines[range.End.Line].Length;
             range = Clamp(range);
-
-            L.Info("Clamped DeleteRange: " + range.ToString());
 
             if (pushUndo)
                 PushUndoState(false);
@@ -773,6 +771,7 @@ namespace StationeersIC10Editor
             if (DeleteRange(Selection))
             {
                 Selection.Reset();
+                _isCodeChanged = true;
                 return true;
             }
 
@@ -839,6 +838,8 @@ namespace StationeersIC10Editor
 
             if (atCaret)
                 CaretPos = Clamp(new TextPosition(CaretLine + newLines.Count, newCaretCol));
+
+            _isCodeChanged = true;
         }
 
         public TextPosition Move(TextPosition startPos, MoveAction action)
@@ -1381,9 +1382,10 @@ namespace StationeersIC10Editor
             ImGui.SameLine();
 
             var pos = ImGui.GetCursorScreenPos();
+            var code = Code;
 
             var sLines = $"{Lines.Count,3}";
-            var sBytes = $"{Code.Length,4}";
+            var sBytes = $"{code.Length+Lines.Count-1,4}";
 
             uint lineColor = _colorDefault;
             if (EnforceLineLimit)
@@ -1396,7 +1398,7 @@ namespace StationeersIC10Editor
             if (EnforceByteLimit)
             {
                 sBytes += "/4096";
-                byteColor = Code.Length < 4000 ? _colorGood : (Code.Length <= 4096 ? _colorWarning : _colorBad);
+                byteColor = code.Length < 4000 ? _colorGood : (code.Length <= 4096 ? _colorWarning : _colorBad);
             }
 
             var drawList = ImGui.GetWindowDrawList();

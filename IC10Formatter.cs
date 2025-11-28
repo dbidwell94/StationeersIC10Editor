@@ -12,6 +12,14 @@ namespace StationeersIC10Editor
         public class IC10CodeFormatter : ICodeFormatter
         {
 
+            public IC10CodeFormatter()
+            {
+                OnCodeChanged += () =>
+                {
+                    UpdateDataType(null, defer: false);
+                };
+            }
+
             virtual public string TrimToken(string token)
             {
                 return token.TrimEnd(':');
@@ -270,18 +278,14 @@ namespace StationeersIC10Editor
 
                 tokens.SetTypes(types);
 
-                foreach (IC10Token token in tokens)
-                {
-                    L.Debug($"Parsed token: {token.Text}, column: {token.Column}, color: {token.Color}, datatype: {token.DataType}, error: {token.Error}, tooltip: {token.Tooltip}, status: {token.Status}");
-                }
-
                 return tokens;
             }
 
 
             public override void ResetCode(string code)
             {
-                L.Debug("IC10CodeFormatter - Reset");
+                L.Info("IC10CodeFormatter - Reset");
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 defines.Clear();
                 regAliases.Clear();
                 devAliases.Clear();
@@ -291,62 +295,81 @@ namespace StationeersIC10Editor
                 var lines = code.Split('\n');
                 foreach (var line in lines)
                     AppendLine(line);
+                sw.Stop();
+                L.Info($"IC10CodeFormatter - Reset complete in {sw.ElapsedMilliseconds} ms");
             }
 
-            public void UpdateDataType(string token)
+
+            private HashSet<string> _tokensToUpdate = new HashSet<string>();
+            public void UpdateDataType(string newToken, bool defer = true)
             {
-                L.Debug($"UpdateDataType for token: {token}");
-                int count = 0;
-                DataType type = DataType.Unknown;
+                if (newToken != null)
+                    _tokensToUpdate.Add(newToken);
 
-                if (defines.ContainsKey(token))
-                {
-                    L.Debug($"Token {token} is a define with count {defines[token]}");
-                    count += defines[token];
-                    type = DataType.Number;
-                }
+                if (defer)
+                    return;
 
-                if (devAliases.ContainsKey(token))
-                {
-                    L.Debug($"Token {token} is a device alias with count {devAliases[token]}");
-                    count += 1; // multiple aliaes are allowed, thus only count as 1
-                    type = DataType.Device;
-                }
-                if (regAliases.ContainsKey(token))
-                {
-                    L.Debug($"Token {token} is a register alias with count {regAliases[token]}");
-                    count += 1; // multiple aliaes are allowed, thus only count as 1
-                    type = DataType.Register;
-                }
+                var sw = System.Diagnostics.Stopwatch.StartNew();
 
-                if (labels.ContainsKey(TrimToken(token)))
+                foreach (var token in _tokensToUpdate)
                 {
-                    L.Debug($"Token {token} is a label with count {labels[token]}");
-                    count += labels[token];
-                    type = DataType.Label;
-                }
+                    L.Debug($"UpdateDataType for token: {token}");
+                    int count = 0;
+                    DataType type = DataType.Unknown;
 
-                if (IC10Utils.Instructions.ContainsKey(token))
-                {
-                    L.Debug($"Token {token} is an instruction");
-                    count += 1;
-                    type = DataType.Instruction;
-                }
+                    if (defines.ContainsKey(token))
+                    {
+                        L.Debug($"Token {token} is a define with count {defines[token]}");
+                        count += defines[token];
+                        type = DataType.Number;
+                    }
 
-                if (count > 1)
-                {
-                    L.Warning($"Token {token} has multiple definitions, marking as error");
-                    type = DataType.Unknown;
-                }
+                    if (devAliases.ContainsKey(token))
+                    {
+                        L.Debug($"Token {token} is a device alias with count {devAliases[token]}");
+                        count += 1; // multiple aliaes are allowed, thus only count as 1
+                        type = DataType.Device;
+                    }
+                    if (regAliases.ContainsKey(token))
+                    {
+                        L.Debug($"Token {token} is a register alias with count {regAliases[token]}");
+                        count += 1; // multiple aliaes are allowed, thus only count as 1
+                        type = DataType.Register;
+                    }
 
-                if (types.ContainsKey(token) && types[token] != type)
-                {
-                    L.Warning($"Token {token} changed type from {types[token]} to {type}");
+                    if (labels.ContainsKey(TrimToken(token)))
+                    {
+                        L.Debug($"Token {token} is a label with count {labels[token]}");
+                        count += labels[token];
+                        type = DataType.Label;
+                    }
+
+                    if (IC10Utils.Instructions.ContainsKey(token))
+                    {
+                        L.Debug($"Token {token} is an instruction");
+                        count += 1;
+                        type = DataType.Instruction;
+                    }
+
+                    if (count > 1)
+                    {
+                        L.Warning($"Token {token} has multiple definitions, marking as error");
+                        type = DataType.Unknown;
+                    }
+
+                    if (types.ContainsKey(token) && types[token] != type)
+                    {
+                        L.Warning($"Token {token} changed type from {types[token]} to {type}");
+                    }
+                    types[token] = type;
                 }
-                types[token] = type;
 
                 foreach (IC10Line line in Lines)
                     line.SetTypes(types);
+
+                _tokensToUpdate.Clear();
+                sw.Stop();
+                L.Info($"UpdateDataType complete in {sw.ElapsedMilliseconds} ms");
             }
 
             private void AddDictEntry(Dictionary<string, int> dict, string key, DataType type)

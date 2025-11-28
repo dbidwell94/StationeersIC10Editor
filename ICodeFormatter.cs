@@ -183,7 +183,7 @@ namespace StationeersIC10Editor
         public static uint ColorNumber = ColorFromHTML("#20b2aa");
         public static float LineNumberOffset = 5.3f;
 
-        public FormattedText Lines { get; protected set; } = new FormattedText();
+        public FormattedText Lines = new FormattedText();
         public string RawText => Lines.RawText;
         public Line CurrentLine
         {
@@ -209,7 +209,7 @@ namespace StationeersIC10Editor
         public FormattedText Tooltip => _tooltip;
 
         // this will be triggered by the editor after a (batch of) changes
-        public Action OnCodeChanged = delegate { };
+        public Action OnCodeChanged = () => {};
 
         public abstract Line ParseLine(string line);
 
@@ -307,6 +307,7 @@ namespace StationeersIC10Editor
             Lines.Clear();
             foreach (var line in lines)
                 Lines.Add(ParseLine(line));
+            OnCodeChanged();
         }
 
         virtual public void DrawLine(int lineIndex, TextRange selection, bool drawLineNumber = true)

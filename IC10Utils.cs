@@ -297,11 +297,11 @@ namespace StationeersIC10Editor
                         {
 
                             var opcode = indexer.GetValue(opcodesObj, new[] { name });
-                            L.Info($"IC10Extender: Found opcode {name}, type: {opcode.GetType().FullName}");
+                            L.Debug($"IC10Extender: Found opcode {name}, type: {opcode.GetType().FullName}");
                             var example = name + " " + opcode.GetType().GetMethod("CommandExample", new[] { typeof(int), typeof(string) })?.Invoke(opcode, new object[] { 0, null }) as string;
-                            L.Info($"  Example: {example}");
+                            L.Debug($"  Example: {example}");
                             var description = opcode.GetType().GetMethod("Description")?.Invoke(opcode, null) as string;
-                            L.Info($"  Description: {description}");
+                            L.Debug($"  Description: {description}");
                             IC10Utils.Instructions[name] = new IC10OpCode(name, description, example);
                         }
                         break;
@@ -402,6 +402,7 @@ namespace StationeersIC10Editor
                     if (Has(DataType.Label)) at.Add(DataType.Number, DataType.Register);
                     if (Has(DataType.DeviceId)) at.Add(DataType.Number, DataType.Register);
                     if (Has(DataType.BatchMode)) at.Add(DataType.Number);
+                    if (Has(DataType.LogicType)) at.Add(DataType.Number);
                     return at;
                 }
             }
@@ -418,7 +419,6 @@ namespace StationeersIC10Editor
 
             public IC10OpCode(string name, string description, string example)
             {
-                L.Info($"Defining opcode {name}, description: {description}, example: {example}");
                 IsBuiltin = true;
                 Name = name;
                 Description = description;
@@ -426,7 +426,6 @@ namespace StationeersIC10Editor
                 float wmax = 0.0f;
                 FormattedText TooltipHeader = IC10CodeFormatter.ParseColoredText($"Instruction: <color=yellow>{name}</color>", ref wmax);
                 Line TooltipExample = IC10CodeFormatter.ParseColoredText($"    {example}", ref w)[0];
-                L.Info($"Parsed example line with width {w}, Count={TooltipExample.Count}");
                 wmax = Math.Max(wmax, w);
 
                 int i = 1;
@@ -673,7 +672,6 @@ namespace StationeersIC10Editor
 
                     token.Color = IC10CodeFormatter.GetColor(token);
                     token.Background = IC10CodeFormatter.GetBackgroundColor(token);
-                    L.Info($"Token '{token.Text}' assigned type {token.DataType}, color {token.Color:X8}");
                 }
 
                 if (IsInstruction)

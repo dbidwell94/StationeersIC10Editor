@@ -29,7 +29,6 @@ namespace StationeersIC10Editor
 
         private static EditorWindow GetEditor(ProgrammableChipMotherboard isc)
         {
-            L.Info($"Getting IC10Editor for source code {isc}");
             EditorWindow editor;
             if (!EditorData.TryGetValue(isc, out editor))
             {

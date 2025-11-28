@@ -16,7 +16,7 @@ namespace StationeersIC10Editor
 
         public static void Debug(string message)
         {
-            _logger?.LogDebug(message);
+            // _logger?.LogDebug(message);
         }
 
         public static void Info(string message)

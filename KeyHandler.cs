@@ -641,13 +641,8 @@ namespace StationeersIC10Editor
                     CaretPos = new TextPosition(Window.ActiveTab.Lines.Count - 1, Window.ActiveTab.Lines[Window.ActiveTab.Lines.Count - 1].Length);
 
                 for (int i = 0; i <= 9; i++)
-                {
                     if (Input.GetKeyDown(KeyCode.Alpha0 + i))
-                    {
-                        L.Info($"Ctrl+Number - go to tab {i}");
                         Window.SetTab((i + 9) % 10);
-                    }
-                }
 
                 if (shift && Input.GetKeyDown(KeyCode.Space))
                     Window.PreviousTab();
@@ -925,7 +920,6 @@ namespace StationeersIC10Editor
                     if (c >= '0' && c <= '9')
                     {
                         int num = (int)(c - '0');
-                        L.Info($"Ctrl+Number - go to tab {num}");
                         Window.SetTab(num);
                     }
                     continue;
