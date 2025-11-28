@@ -89,9 +89,9 @@ namespace StationeersIC10Editor
 
         private void OnDestroy()
         {
-            L.Info($"OnDestroy ${PluginName} {VersionInfo.VersionGit}");
-            IC10EditorPatches.Cleanup();
-            _harmony.UnpatchSelf();
+            // L.Info($"OnDestroy ${PluginName} {VersionInfo.VersionGit}");
+            // IC10EditorPatches.Cleanup();
+            // _harmony.UnpatchSelf();
         }
     }
 }
