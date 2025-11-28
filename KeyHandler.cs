@@ -201,7 +201,7 @@ namespace StationeersIC10Editor
                 case "f":
                 case "t":
                     {
-                        var line = ed.Lines[pos.Line];
+                        var line = ed.Lines[pos.Line].Text;
                         var newCol = pos.Col;
                         var apply = true;
                         for (int i = 0; i < Count; i++)
@@ -365,7 +365,7 @@ namespace StationeersIC10Editor
                     editor.PushUndoState(false);
                     for (int line = range.Start.Line; line <= range.End.Line; line++)
                     {
-                        var currentLine = editor.Lines[line];
+                        var currentLine = editor.Lines[line].Text;
                         if (Command == "<<" && currentLine.StartsWith("  "))
                             editor.ReplaceLine(line, currentLine.Substring(2));
                         else if (Command == ">>")
@@ -377,7 +377,7 @@ namespace StationeersIC10Editor
                     break;
                 case "~":
                     editor.PushUndoState(false);
-                    var lineText = editor.Lines[editor.CaretLine];
+                    var lineText = editor.Lines[editor.CaretLine].Text;
                     for (int col = editor.CaretCol; col < Math.Min(editor.CaretCol + (int)Count, lineText.Length); col++)
                     {
                         char c = lineText[col];
@@ -772,9 +772,8 @@ namespace StationeersIC10Editor
                 {
                     // Merge with previous line
                     int prevLineLength = Editor.Lines[CaretLine - 1].Length;
-                    CurrentLine = Editor.Lines[CaretLine - 1] + CurrentLine;
-                    Editor.Lines.RemoveAt(CaretLine - 1);
-                    Editor.CodeFormatter.RemoveLine(CaretLine - 1);
+                    CurrentLine = Editor.Lines[CaretLine - 1].Text + CurrentLine;
+                    Editor.RemoveLine(CaretLine - 1);
                     CaretLine--;
                     CaretCol = prevLineLength;
                 }
@@ -792,9 +791,8 @@ namespace StationeersIC10Editor
                 else if (CaretCol == CurrentLine.Length && CaretLine < Editor.Lines.Count - 1)
                 {
                     // Merge with next line
-                    CurrentLine = CurrentLine + Editor.Lines[CaretLine + 1];
-                    Editor.Lines.RemoveAt(CaretLine + 1);
-                    Editor.CodeFormatter.RemoveLine(CaretLine);
+                    CurrentLine = CurrentLine + Editor.Lines[CaretLine + 1].Text;
+                    Editor.RemoveLine(CaretLine);
                 }
             }
 
@@ -805,8 +803,7 @@ namespace StationeersIC10Editor
                     Editor.PushUndoState(false);
                 string newLine = CurrentLine.Substring(CaretCol);
                 CurrentLine = CurrentLine.Substring(0, CaretCol);
-                Editor.Lines.Insert(CaretLine + 1, newLine);
-                Editor.CodeFormatter.InsertLine(CaretLine + 1, newLine);
+                Editor.InsertLine(CaretLine + 1, newLine);
                 CaretPos = new TextPosition(CaretLine + 1, 0);
                 Editor.ScrollToCaret += 1; // we need to scroll to caret in the next two frames, one for updating the scroll area, one to actually scroll there
             }

@@ -184,6 +184,7 @@ namespace StationeersIC10Editor
 
         public int ScrollToCaret = 0;
         protected double _timeLastAction = 0.0;
+        protected bool _isCodeChanged = false;
 
         public double TimeLastAction => _timeLastAction;
         public KeyMode KeyMode => KeyHandler.Mode;
@@ -191,8 +192,8 @@ namespace StationeersIC10Editor
         public LinkedList<EditorState> UndoList;
         public LinkedList<EditorState> RedoList;
         public ICodeFormatter CodeFormatter;
-        public List<string> Lines;
-        public string Code => string.Join("\n", Lines);
+        public string Code => CodeFormatter.RawText;
+        public List<Line> Lines => CodeFormatter.Lines;
         public string CommandStatus = "";
 
         public ConfirmWindow _confirmWindow = null;
@@ -201,13 +202,11 @@ namespace StationeersIC10Editor
         {
             Target = target;
             KeyHandler = keyHandler;
-            CodeFormatter = CodeFormatters.GetFormatter("IC10");
+            CodeFormatter = CodeFormatters.GetFormatter();
             UndoList = new LinkedList<EditorState>();
             RedoList = new LinkedList<EditorState>();
-            Lines = new List<string>();
-            Lines.Add("");
-            CaretPos = new TextPosition(0, 0);
             CodeFormatter.ResetCode("");
+            CaretPos = new TextPosition(0, 0);
         }
 
         public TextPosition CaretPos
@@ -247,12 +246,12 @@ namespace StationeersIC10Editor
         {
             get
             {
-                return Lines[CaretLine];
+                return Lines[CaretLine].Text;
             }
 
             set
             {
-                if (value == Lines[CaretLine])
+                if (value == Lines[CaretLine].Text)
                     return;
 
                 ReplaceLine(CaretLine, value);
@@ -326,8 +325,11 @@ namespace StationeersIC10Editor
             if (lineIndex < 0 || lineIndex >= Lines.Count)
                 return;
 
-            CodeFormatter.RemoveLine(lineIndex);
-            Lines.RemoveAt(lineIndex);
+            if (CodeFormatter.Lines.Count == 1)
+                ReplaceLine(0, "");
+            else
+                CodeFormatter.RemoveLine(lineIndex);
+            _isCodeChanged = true;
         }
 
         public void ReplaceLine(int lineIndex, string newLine)
@@ -336,7 +338,16 @@ namespace StationeersIC10Editor
                 return;
 
             CodeFormatter.ReplaceLine(lineIndex, newLine);
-            Lines[lineIndex] = newLine;
+            _isCodeChanged = true;
+        }
+
+        public void InsertLine(int lineIndex, string newLine)
+        {
+            if (lineIndex < 0 || lineIndex > Lines.Count)
+                return;
+
+            CodeFormatter.InsertLine(lineIndex, newLine);
+            _isCodeChanged = true;
         }
 
 
@@ -439,7 +450,7 @@ namespace StationeersIC10Editor
         public TextPosition FindWhitespace(TextPosition pos, bool forward = true)
         {
             // Move to the next whitespace or next line if there is none in this line
-            string line = Lines[pos.Line];
+            string line = Lines[pos.Line].Text;
             int dir = forward ? 1 : -1;
             while (pos.Col < line.Length && pos.Col >= 0 && !char.IsWhiteSpace(line[pos.Col]))
             {
@@ -457,7 +468,7 @@ namespace StationeersIC10Editor
                 return pos;
 
             int dir = forward ? 1 : -1;
-            string line = Lines[pos.Line];
+            string line = Lines[pos.Line].Text;
 
             while (pos.Col < line.Length && pos.Col >= 0 && char.IsWhiteSpace(this[pos]))
                 pos.Col += dir;
@@ -491,7 +502,7 @@ namespace StationeersIC10Editor
 
             while (lineIndex < Lines.Count)
             {
-                string line = Lines[lineIndex];
+                string line = Lines[lineIndex].Text;
                 int foundIndex = line.IndexOf(searchTerm, colIndex, StringComparison.Ordinal);
                 if (foundIndex != -1)
                     return new TextPosition(lineIndex, foundIndex);
@@ -511,7 +522,7 @@ namespace StationeersIC10Editor
 
             while (lineIndex >= 0)
             {
-                string line = Lines[lineIndex];
+                string line = Lines[lineIndex].Text;
 
                 if (colIndex >= line.Length) colIndex = line.Length - 1;
                 if (colIndex < 0)
@@ -540,7 +551,7 @@ namespace StationeersIC10Editor
         {
             get
             {
-                var line = Lines[pos.Line];
+                var line = Lines[pos.Line].Text;
                 if (pos.Col == line.Length)
                     return '\n';
                 return line[pos.Col];
@@ -667,13 +678,13 @@ namespace StationeersIC10Editor
             }
 
             if (start.Line == end.Line)
-                return Lines[start.Line].Substring(start.Col, end.Col - start.Col) + suffix;
+                return Lines[start.Line].Text.Substring(start.Col, end.Col - start.Col) + suffix;
 
-            string code = Lines[start.Line].Substring(start.Col);
+            string code = Lines[start.Line].Text.Substring(start.Col);
             for (int i = start.Line + 1; i < end.Line; i++)
-                code += '\n' + Lines[i];
+                code += '\n' + Lines[i].Text;
 
-            code += '\n' + Lines[end.Line].Substring(0, end.Col);
+            code += '\n' + Lines[end.Line].Text.Substring(0, end.Col);
             return code + suffix;
         }
 
@@ -710,9 +721,13 @@ namespace StationeersIC10Editor
             if (!(bool)range)
                 return false;
 
+            L.Info("DeleteRange: " + range.ToString());
+
             range = range.Sorted();
             bool removeLast = range.End.Col > Lines[range.End.Line].Length;
             range = Clamp(range);
+
+            L.Info("Clamped DeleteRange: " + range.ToString());
 
             if (pushUndo)
                 PushUndoState(false);
@@ -726,7 +741,7 @@ namespace StationeersIC10Editor
                     RemoveLine(start.Line);
                 else
                 {
-                    string line = Lines[start.Line];
+                    string line = Lines[start.Line].Text;
                     string newLine =
                         line.Substring(0, start.Col) + line.Substring(end.Col, line.Length - end.Col);
                     ReplaceLine(start.Line, newLine);
@@ -735,8 +750,8 @@ namespace StationeersIC10Editor
             }
             else
             {
-                string firstLine = Lines[start.Line];
-                string lastLine = Lines[end.Line];
+                string firstLine = Lines[start.Line].Text;
+                string lastLine = Lines[end.Line].Text;
                 string newFirstLine = firstLine.Substring(0, start.Col);
                 string newLastLine = lastLine.Substring(end.Col, lastLine.Length - end.Col);
                 ReplaceLine(start.Line, newFirstLine + newLastLine);
@@ -744,7 +759,6 @@ namespace StationeersIC10Editor
                 for (int i = end.Line; i > start.Line; i--)
                 {
                     CodeFormatter.RemoveLine(i);
-                    Lines.RemoveAt(i);
                 }
                 if (removeLast)
                     RemoveLine(start.Line);
@@ -780,8 +794,6 @@ namespace StationeersIC10Editor
         {
             if (pushUndo)
                 PushUndoState(false);
-            Lines.Clear();
-            Lines.Add(string.Empty);
             CodeFormatter.ResetCode(string.Empty);
             CaretLine = 0;
             CaretCol = 0;
@@ -804,7 +816,7 @@ namespace StationeersIC10Editor
 
             bool atCaret = pos == CaretPos;
 
-            string line = Lines[pos.Line];
+            string line = Lines[pos.Line].Text;
 
             // CodeFormatter.RemoveLine(CaretLine);
             string beforeCaret = line.Substring(0, pos.Col);
@@ -821,7 +833,7 @@ namespace StationeersIC10Editor
             newLines.RemoveAt(0);
             int newCaretCol = newLines[newLines.Count - 1].Length;
             newLines[newLines.Count - 1] += afterCaret;
-            Lines.InsertRange(pos.Line + 1, newLines);
+
             for (var j = 0; j < newLines.Count; j++)
                 CodeFormatter.InsertLine(pos.Line + 1 + j, newLines[j]);
 
@@ -869,25 +881,23 @@ namespace StationeersIC10Editor
         {
             code = code.Replace("\r", string.Empty);
             ClearCode(pushUndo);
-            Lines.Clear();
             var lines = code.Split('\n');
             CodeFormatter.ResetCode(code);
-            foreach (var line in lines)
-                Lines.Add(line);
             CaretPos = new TextPosition(0, 0);
             if (pushUndo)
                 PushUndoState(false);
+            _isCodeChanged = true;
         }
 
         public string Save()
         {
             if (PCM)
             {
-                var code = CodeFormatter.Compile();
                 if (LimitExceeded)
                 {
                     return LimitExceededMessage;
                 }
+                var code = CodeFormatter.Compile();
                 PCM.InputFinished(code);
                 return "Saved to Motherboard";
             }
@@ -905,6 +915,15 @@ namespace StationeersIC10Editor
             return "Error: No target to save to.";
         }
 
+
+        public void Update()
+        {
+            if (_isCodeChanged)
+            {
+                CodeFormatter.OnCodeChanged();
+                _isCodeChanged = false;
+            }
+        }
     }
 
     public class EditorWindow
@@ -921,7 +940,7 @@ namespace StationeersIC10Editor
         public IEditor ActiveTab => Tabs[_activeTabIndex];
         public IEditor MotherboardTab => Tabs[0];
 
-        public List<string> Lines => ActiveTab.Lines;
+        public List<Line> Lines => ActiveTab.Lines;
         public string Code => ActiveTab.Code;
         public int CaretLine => ActiveTab.CaretLine;
         public int CaretCol => ActiveTab.CaretCol;
@@ -1311,8 +1330,9 @@ namespace StationeersIC10Editor
                     bool isSelected = fmt == formatter.Name;
                     if (ImGui.Selectable(fmt, isSelected))
                     {
+                        var code = ActiveTab.Code;
                         ActiveTab.CodeFormatter = CodeFormatters.GetFormatter(fmt);
-                        ActiveTab.CodeFormatter.ResetCode(ActiveTab.Code);
+                        ActiveTab.CodeFormatter.ResetCode(code);
                     }
                     if (isSelected)
                         ImGui.SetItemDefaultFocus();
@@ -1458,6 +1478,7 @@ namespace StationeersIC10Editor
 
         public unsafe void DrawCodeArea()
         {
+            Editor.Update();
             CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
             var padding = ImGui.GetStyle().FramePadding;
             float scrollHeight = ImGui.GetContentRegionAvail().y - 2 * ImGui.GetTextLineHeightWithSpacing() - 2 * padding.y;
@@ -1469,7 +1490,7 @@ namespace StationeersIC10Editor
             linePos.x += 4.3f * CharWidth;
             ImGui.GetWindowDrawList().AddLine(
                 linePos,
-                new Vector2(linePos.x, linePos.y + LineHeight * Code.Length),
+                new Vector2(linePos.x, linePos.y + LineHeight * Lines.Count),
                 ICodeFormatter.ColorLineNumber,
                 1.5f);
 
@@ -1936,8 +1957,7 @@ namespace StationeersIC10Editor
             }
 
             line = Mathf.Clamp(line, 0, Lines.Count - 1);
-            string lineText = Lines[line];
-            column = Mathf.Clamp(column, 0, lineText.Length);
+            column = Mathf.Clamp(column, 0, Lines[line].Length);
 
             return new TextPosition(line, column);
         }

@@ -125,7 +125,6 @@ namespace StationeersIC10Editor
             foreach (var token in this)
             {
                 pos.x = x0 + (CharWidth * token.Column);
-                L.Info($"Drawing token '{token.Text}' at ({pos.x}, {pos.y}) with color {token.Color:X8}");
                 drawList.AddText(pos, token.Color, token.Text);
             }
         }
@@ -186,6 +185,15 @@ namespace StationeersIC10Editor
 
         public FormattedText Lines { get; protected set; } = new FormattedText();
         public string RawText => Lines.RawText;
+        public Line CurrentLine
+        {
+            get
+            {
+                if (_lastCaretPos.Line >= 0 && _lastCaretPos.Line < Lines.Count)
+                    return Lines[_lastCaretPos.Line];
+                return null;
+            }
+        }
         public string Name = "";
 
         protected FormattedText _status = null;
@@ -207,6 +215,12 @@ namespace StationeersIC10Editor
 
         public ICodeFormatter()
         {
+            OnCodeChanged += () =>
+            {
+                _status = null;
+                _autocomplete = null;
+                _tooltip = null;
+            };
         }
 
         public static uint ColorFromHTML(string htmlColor)
@@ -295,14 +309,17 @@ namespace StationeersIC10Editor
                 Lines.Add(ParseLine(line));
         }
 
-        virtual public void DrawLine(int lineIndex, TextRange selection)
+        virtual public void DrawLine(int lineIndex, TextRange selection, bool drawLineNumber = true)
         {
             Vector2 pos = ImGui.GetCursorScreenPos();
 
             var drawList = ImGui.GetWindowDrawList();
 
-            drawList.AddText(pos, ICodeFormatter.ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
-            pos.x += ICodeFormatter.LineNumberOffset * CharWidth;
+            if (drawLineNumber)
+            {
+                drawList.AddText(pos, ICodeFormatter.ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
+                pos.x += ICodeFormatter.LineNumberOffset * CharWidth;
+            }
             int selectionMin = -1,
                 selectionMax = -1;
 
