@@ -9,40 +9,6 @@ using UnityEngine;
 
 using static Settings;
 
-public static class CodeFormatters
-{
-    private static Dictionary<string, Func<ICodeFormatter>> formatters =
-        new Dictionary<string, Func<ICodeFormatter>>();
-    private static string defaultFormatterName = "Plain";
-
-    public static List<string> FormatterNames => new List<string>(formatters.Keys);
-
-    public static void RegisterFormatter(
-        string name,
-        Func<ICodeFormatter> formatter,
-        bool isDefault = false
-    )
-    {
-        L.Info($"Registering code formatter: {name}");
-        if (!formatters.ContainsKey(name))
-            formatters.Add(name, formatter);
-
-        formatters[name] = formatter;
-
-        if (isDefault)
-            defaultFormatterName = name;
-    }
-
-    public static ICodeFormatter GetFormatter(string name = null)
-    {
-        if (name == null || !formatters.ContainsKey(name))
-            return GetFormatter(defaultFormatterName);
-        var formatter = formatters[name]();
-        formatter.Name = name;
-        return formatter;
-    }
-}
-
 /// <summary>
 /// Line acts as the Source Buffer for a single line of code.
 /// It holds the raw string and a list of SemanticTokens pointing to ranges within that string.

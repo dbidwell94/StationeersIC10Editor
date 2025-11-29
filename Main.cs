@@ -119,8 +119,8 @@ namespace StationeersIC10Editor
                 _harmony = new Harmony(PluginGuid);
                 _harmony.PatchAll();
 
-                CodeFormatters.RegisterFormatter("Plain", () => new PlainTextFormatter());
-                CodeFormatters.RegisterFormatter("IC10", () => new IC10.IC10CodeFormatter());
+                CodeFormatters.RegisterFormatter("Plain", typeof(PlainTextFormatter));
+                CodeFormatters.RegisterFormatter("IC10", typeof(IC10.IC10CodeFormatter), true);
             }
             catch (Exception ex)
             {
