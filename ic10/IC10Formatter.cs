@@ -1,701 +1,425 @@
-namespace StationeersIC10Editor
+namespace StationeersIC10Editor.IC10;
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
+
+public class IC10CodeFormatter : ICodeFormatter
 {
-    using System;
-    using System.Text.RegularExpressions;
-    using System.Collections.Generic;
-    using ImGuiNET;
-    using UnityEngine;
-    using static Settings;
+    private Dictionary<string, DataType> types = new Dictionary<string, DataType>();
+    private Dictionary<string, int> defines = new Dictionary<string, int>();
+    private Dictionary<string, int> regAliases = new Dictionary<string, int>();
+    private Dictionary<string, int> devAliases = new Dictionary<string, int>();
+    private Dictionary<string, int> labels = new Dictionary<string, int>();
+    private HashSet<string> _tokensToUpdate = new HashSet<string>();
 
-    namespace IC10
+    public IC10CodeFormatter()
     {
-        public class IC10CodeFormatter : ICodeFormatter
+        OnCodeChanged += () =>
         {
+            UpdateDataType(null, defer: false);
+        };
+    }
 
-            public IC10CodeFormatter()
+    public string TrimToken(string token)
+    {
+        return token.TrimEnd(':');
+    }
+
+    public static uint GetColor(DataType type, string text)
+    {
+        if (type == DataType.Color)
+        {
+            if (
+                text == "Color.White"
+                || text == "Color.Yellow"
+                || text == "Color.Pink"
+                || text == "Color.Green"
+            )
+                return ColorFromHTML("black");
+            return ColorFromHTML("white");
+        }
+        switch (type)
+        {
+            case DataType.Number:
+                return ColorNumber;
+            case DataType.Device:
+                return ColorDevice;
+            case DataType.Register:
+                return ColorRegister;
+            case DataType.LogicType:
+            case DataType.LogicSlotType:
+            case DataType.BatchMode:
+                return ColorLogicType;
+            case DataType.Instruction:
+            case DataType.Define:
+            case DataType.Alias:
+                return ColorInstruction;
+            case DataType.Label:
+                return ColorLabel;
+            case DataType.Comment:
+                return ColorComment;
+            case DataType.Unknown:
+                return ColorError;
+            case DataType.BasicEnum:
+                return ColorBasicEnum;
+            default:
+                return ColorDefault;
+        }
+    }
+
+    public static uint GetBackgroundColor(DataType type, string text)
+    {
+        if (type != DataType.Color)
+            return 0;
+        return IC10Utils.Colors.TryGetValue(text, out uint color) ? color : 0;
+    }
+
+    public static uint ColorInstruction = ColorFromHTML("#ffff00");
+    public static uint ColorDevice = ColorFromHTML("#00ff00");
+    public static uint ColorLogicType = ColorFromHTML("#ff8000");
+    public static uint ColorRegister = ColorFromHTML("#0080ff");
+    public static uint ColorBasicEnum = ColorFromHTML("#20b2aa");
+    public static uint ColorDefine = ColorNumber;
+    public static uint ColorAlias = ColorFromHTML("#4d4dcc");
+    public static uint ColorLabel = ColorFromHTML("#800080");
+
+    public static int FindNextWhitespace(string text, int startIndex)
+    {
+        bool haveQuote = false;
+        while (startIndex < text.Length && (!char.IsWhiteSpace(text[startIndex]) || haveQuote))
+        {
+            if (text[startIndex] == '\"')
+                haveQuote = !haveQuote;
+            startIndex++;
+        }
+        return startIndex;
+    }
+
+    public static int FindNextNonWhitespace(string text, int startIndex)
+    {
+        while (startIndex < text.Length && char.IsWhiteSpace(text[startIndex]))
+            startIndex++;
+        return startIndex;
+    }
+
+    public override Line ParseLine(string text)
+    {
+        if (text == null)
+            text = string.Empty;
+        var line = new IC10Line(text);
+
+        string processingText = text;
+        int commentIndex = text.IndexOf('#');
+        if (commentIndex >= 0)
+        {
+            processingText = text.Substring(0, commentIndex);
+            line.AddToken(
+                new SemanticToken(
+                    0,
+                    commentIndex,
+                    text.Length - commentIndex,
+                    ColorComment,
+                    (uint)DataType.Comment
+                )
+            );
+        }
+
+        int i = 0;
+        List<SemanticToken> logicTokens = new List<SemanticToken>();
+        List<string> tokenTexts = new List<string>();
+
+        while (i < processingText.Length)
+        {
+            int start = FindNextNonWhitespace(processingText, i);
+            int end = FindNextWhitespace(processingText, start);
+            if (start >= processingText.Length)
+                break;
+
+            string tokenText = processingText.Substring(start, end - start);
+
+            var st = new SemanticToken(0, start, end - start, 0, (uint)DataType.Unknown);
+            logicTokens.Add(st);
+            tokenTexts.Add(tokenText);
+
+            i = end;
+        }
+
+        IdentifyTypesAndAddTokens(line, logicTokens, tokenTexts, types);
+
+        return line;
+    }
+
+    public void IdentifyTypesAndAddTokens(
+        Line line,
+        List<SemanticToken> tokens,
+        List<string> texts,
+        Dictionary<string, DataType> globalTypes
+    )
+    {
+        if (tokens.Count == 0)
+            return;
+
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            var t = tokens[i];
+            string txt = texts[i];
+            DataType dt = DataType.Unknown;
+            string error = null;
+            string tooltip = null;
+
+            if (IC10Utils.IsBuiltin(txt))
+                dt = IC10Utils.Types[txt].ToDataType();
+            else if (txt.EndsWith(":"))
+                dt = DataType.Label;
+            else if (globalTypes.TryGetValue(txt, out DataType type))
+                dt = type;
+            else if (double.TryParse(txt, out _))
             {
-                OnCodeChanged += () =>
+                dt = DataType.Number;
+                if (int.TryParse(txt, out int hash)) { }
+            }
+            else if (txt.StartsWith("$"))
+                dt = DataType.Number;
+            else if (
+                IC10Line.IsHashExpression(txt)
+                || IC10Line.IsStringExpression(txt)
+                || IC10Line.IsBinaryExpression(txt)
+            )
+                dt = DataType.Number;
+            else if (IC10Line.IsDeviceChannel(txt))
+                dt = DataType.Device;
+            else
+                dt = DataType.Unknown;
+
+            bool isInstructionLine =
+                tokens.Count > 0 && IC10Utils.Instructions.ContainsKey(texts[0]);
+
+            if (isInstructionLine)
+            {
+                if (i == 0)
+                    dt = DataType.Instruction;
+
+                if (i > 0)
                 {
-                    UpdateDataType(null, defer: false);
-                };
-            }
+                    var opcode = IC10Utils.Instructions[texts[0]];
+                    int argIndex = i - 1;
+                    if (argIndex < opcode.ArgumentTypes.Count)
+                    {
+                        var expected = opcode.ArgumentTypes[argIndex];
+                        var actualType = IC10Utils.GetType(txt);
+                        actualType.Add(dt);
 
-            virtual public string TrimToken(string token)
-            {
-                return token.TrimEnd(':');
-            }
-
-
-            private void DrawRegistersGrid()
-            {
-                // todo: store this information, update only when code changes
-                bool[] registers = new bool[16];
-                for (int i = 0; i < 16; i++)
-                    registers[i] = false;
-
-                foreach (var line in Lines)
-                    foreach (var token in line)
-                        if (IC10Utils.Registers.Contains(token.Text) && token.Text.StartsWith("r") && token.Text != "ra")
+                        if (!expected.Compat.Has(actualType))
                         {
-                            var reg = token.Text;
-                            while (reg.StartsWith("rr") && reg.Length > 3)
-                                reg = reg.Substring(1);
-                            if (int.TryParse(reg.Substring(1), out int regNum))
-                            {
-                                if (regNum >= 0 && regNum < 16)
-                                    registers[regNum] = true;
-                                else L.Warning($"Register number out of range: {reg}");
-                            }
-                            else L.Warning($"Failed to parse register number: {reg}");
-                            registers[int.Parse(reg.Substring(1))] = true;
+                            error =
+                                $"Invalid argument type {actualType.Description}, expected {expected.Description}";
+                            dt = DataType.Unknown;
                         }
-
-                var drawList = ImGui.GetWindowDrawList();
-
-                Vector2 startPos = ImGui.GetCursorScreenPos();
-                Vector2 windowSize = ImGui.GetWindowSize();
-
-                Vector2 rectSize = new Vector2(9, 9) * Settings.Scale;
-                float spacing = 4.0f * Settings.Scale;
-
-                startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * Settings.buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
-                startPos.y += 8.0f;
-
-                uint colorUsed = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
-                uint colorFree = ImGui.GetColorU32(new Vector4(0.0f, 1.0f, 0.0f, 1.0f));
-
-                float x0 = startPos.x;
-
-                for (int i = 0; i < 16; i++)
-                {
-                    uint color = registers[i] ? colorUsed : colorFree;
-                    int xShift = i + i / 4; // add extra space every 4 registers
-                    startPos.x = x0 + xShift * (rectSize.x + spacing);
-                    drawList.AddCircleFilled(startPos + rectSize / 2, rectSize.x / 2, color, 12);
-                }
-            }
-
-            // public override void DrawStatus(IEditor ed, TextPosition caret)
-            // {
-            //     var status = Lines[caret.Line].GetStatusText(caret.Col);
-            //     if (!string.IsNullOrEmpty(status))
-            //     {
-            //         var color = status.StartsWith("Error") ? ColorError : ColorWarning;
-            //         ImGui.SameLine();
-            //         ImGui.PushStyleColor(ImGuiCol.Text, color);
-            //         ImGui.Text(status);
-            //         ImGui.PopStyleColor();
-            //         ImGui.SameLine();
-            //     }
-            //     DrawRegistersGrid();
-            // }
-            //
-            // public override void DrawLine(int lineIndex, string line, TextRange selection = default)
-            // {
-            //     if (lineIndex < 0 || lineIndex >= Lines.Count)
-            //         return;
-            //     var tokens = Lines[lineIndex];
-            //     Vector2 pos = ImGui.GetCursorScreenPos();
-            //     ImGui
-            //         .GetWindowDrawList()
-            //         .AddText(pos, ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
-            //
-            //     pos.x += LineNumberOffset * CharWidth;
-            //
-            //     int selectionMin = -1,
-            //         selectionMax = -1;
-            //
-            //     foreach (var token in tokens)
-            //         if (token.Background != 0)
-            //         {
-            //             var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
-            //             ImGui.GetWindowDrawList().AddRectFilled(
-            //                 tokenPos,
-            //                 new Vector2(tokenPos.x + CharWidth * token.Text.Length,
-            //                             tokenPos.y + LineHeight),
-            //                 token.Background);
-            //         }
-            //
-            //     if (selection)
-            //     {
-            //         if (selection.Start.Line <= lineIndex && selection.End.Line >= lineIndex)
-            //         {
-            //             selectionMin = lineIndex == selection.Start.Line ? selection.Start.Col : 0;
-            //             selectionMax =
-            //                 lineIndex == selection.End.Line ? selection.End.Col : line.Length;
-            //
-            //             selectionMin = Mathf.Clamp(selectionMin, 0, line.Length);
-            //             selectionMax = Mathf.Clamp(selectionMax, 0, line.Length);
-            //
-            //             Vector2 selStart = new Vector2(pos.x + (CharWidth * selectionMin), pos.y);
-            //             Vector2 selEnd = new Vector2(
-            //                 pos.x + (CharWidth * selectionMax),
-            //                 pos.y + LineHeight);
-            //
-            //             ImGui
-            //                 .GetWindowDrawList()
-            //                 .AddRectFilled(selStart, selEnd, ColorSelection);
-            //         }
-            //     }
-            //
-            //     foreach (var token in tokens)
-            //     {
-            //         var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
-            //         ImGui.GetWindowDrawList().AddText(tokenPos, token.Color, token.Text);
-            //     }
-            //
-            // }
-
-            public static uint GetBackgroundColor(IC10Token token)
-            {
-                if (token.DataType != DataType.Color)
-                    return 0;
-
-                return IC10Utils.Colors.TryGetValue(token.Text, out uint color) ? color : 0;
-
-            }
-
-            public static uint GetColor(IC10Token token)
-            {
-                if (token.DataType == DataType.Color)
-                {
-                    if (token.Text == "Color.White" ||
-                       token.Text == "Color.Yellow" ||
-                       token.Text == "Color.Pink" ||
-                       token.Text == "Color.Green")
-                        return ColorFromHTML("black");
-                    return ColorFromHTML("white");
-                }
-                switch (token.DataType)
-                {
-                    case DataType.Number:
-                        return ColorNumber;
-                    case DataType.Device:
-                        return ColorDevice;
-                    case DataType.Register:
-                        return ColorRegister;
-                    case DataType.LogicType:
-                    case DataType.LogicSlotType:
-                    case DataType.BatchMode:
-                        return ColorLogicType;
-                    case DataType.Instruction:
-                    case DataType.Define:
-                    case DataType.Alias:
-                        return ColorInstruction;
-                    case DataType.Label:
-                        return ColorLabel;
-                    case DataType.Comment:
-                        return ColorComment;
-                    case DataType.Unknown:
-                        return ColorError;
-                    case DataType.BasicEnum:
-                        return ColorBasicEnum;
-                    default:
-                        return ColorDefault;
-                }
-            }
-
-            public static uint ColorInstruction = ColorFromHTML("#ffff00");
-
-            public static uint ColorDevice = ColorFromHTML("#00ff00");
-            public static uint ColorLogicType = ColorFromHTML("#ff8000");
-            public static uint ColorRegister = ColorFromHTML("#0080ff");
-            public static uint ColorBasicEnum = ColorFromHTML("#20b2aa");
-
-            public static uint ColorDefine = ColorNumber;
-            public static uint ColorAlias = ColorFromHTML("#4d4dcc");
-            public static uint ColorLabel = ColorFromHTML("#800080");
-
-            private Dictionary<string, DataType> types = new Dictionary<string, DataType>();
-
-            private Dictionary<string, int> defines = new Dictionary<string, int>();
-            private Dictionary<string, int> regAliases = new Dictionary<string, int>();
-            private Dictionary<string, int> devAliases = new Dictionary<string, int>();
-            private Dictionary<string, int> labels = new Dictionary<string, int>();
-
-            public static int FindNextWhitespace(string text, int startIndex)
-            {
-                bool haveQuote = false;
-                while (startIndex < text.Length && (!char.IsWhiteSpace(text[startIndex]) || haveQuote))
-                {
-                    if (text[startIndex] == '\"')
-                        haveQuote = !haveQuote;
-                    startIndex++;
-                }
-
-                return startIndex;
-            }
-
-            public static int FindNextNonWhitespace(string text, int startIndex)
-            {
-                while (startIndex < text.Length && char.IsWhiteSpace(text[startIndex]))
-                    startIndex++;
-
-                return startIndex;
-            }
-
-            public override Line ParseLine(string text)
-            {
-                if (string.IsNullOrEmpty(text))
-                    return new IC10Line();
-
-                string comment = "";
-                int indexOfComment = text.IndexOf('#');
-                if (text.Contains("#"))
-                {
-                    var index = text.IndexOf('#');
-                    comment = text.Substring(index);
-                    text = text.Substring(0, index);
-                }
-
-                int i = 0;
-
-                var tokens = new IC10Line();
-
-                while (i < text.Length)
-                {
-                    int start = FindNextNonWhitespace(text, i);
-                    int end = FindNextWhitespace(text, start);
-
-                    if (start >= text.Length)
-                        break;
-
-                    string token = text.Substring(start, end - start);
-
-                    tokens.Add(new IC10Token(
-                        token,
-                        start,
-                        0));
-
-                    i = end;
-                }
-
-                if (!string.IsNullOrEmpty(comment))
-                    tokens.Add(new IC10Token(
-                        comment,
-                        indexOfComment,
-                        ColorComment));
-
-                tokens.SetTypes(types);
-
-                return tokens;
-            }
-
-
-            public override void ResetCode(string code)
-            {
-                L.Info("IC10CodeFormatter - Reset");
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                defines.Clear();
-                regAliases.Clear();
-                devAliases.Clear();
-                labels.Clear();
-                Lines.Clear();
-
-                var lines = code.Split('\n');
-                foreach (var line in lines)
-                    AppendLine(line);
-                sw.Stop();
-                L.Info($"IC10CodeFormatter - Reset complete in {sw.ElapsedMilliseconds} ms");
-            }
-
-
-            private HashSet<string> _tokensToUpdate = new HashSet<string>();
-            public void UpdateDataType(string newToken, bool defer = true)
-            {
-                if (newToken != null)
-                    _tokensToUpdate.Add(newToken);
-
-                if (defer)
-                    return;
-
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-
-                foreach (var token in _tokensToUpdate)
-                {
-                    L.Debug($"UpdateDataType for token: {token}");
-                    int count = 0;
-                    DataType type = DataType.Unknown;
-
-                    if (defines.ContainsKey(token))
-                    {
-                        L.Debug($"Token {token} is a define with count {defines[token]}");
-                        count += defines[token];
-                        type = DataType.Number;
                     }
-
-                    if (devAliases.ContainsKey(token))
-                    {
-                        L.Debug($"Token {token} is a device alias with count {devAliases[token]}");
-                        count += 1; // multiple aliaes are allowed, thus only count as 1
-                        type = DataType.Device;
-                    }
-                    if (regAliases.ContainsKey(token))
-                    {
-                        L.Debug($"Token {token} is a register alias with count {regAliases[token]}");
-                        count += 1; // multiple aliaes are allowed, thus only count as 1
-                        type = DataType.Register;
-                    }
-
-                    if (labels.ContainsKey(TrimToken(token)))
-                    {
-                        L.Debug($"Token {token} is a label with count {labels[token]}");
-                        count += labels[token];
-                        type = DataType.Label;
-                    }
-
-                    if (IC10Utils.Instructions.ContainsKey(token))
-                    {
-                        L.Debug($"Token {token} is an instruction");
-                        count += 1;
-                        type = DataType.Instruction;
-                    }
-
-                    if (count > 1)
-                    {
-                        L.Warning($"Token {token} has multiple definitions, marking as error");
-                        type = DataType.Unknown;
-                    }
-
-                    if (types.ContainsKey(token) && types[token] != type)
-                    {
-                        L.Warning($"Token {token} changed type from {types[token]} to {type}");
-                    }
-                    types[token] = type;
-                }
-
-                foreach (IC10Line line in Lines)
-                    line.SetTypes(types);
-
-                _tokensToUpdate.Clear();
-                sw.Stop();
-                L.Info($"UpdateDataType complete in {sw.ElapsedMilliseconds} ms");
-            }
-
-            private void AddDictEntry(Dictionary<string, int> dict, string key, DataType type)
-            {
-                L.Debug($"AddDictEntry: adding key {key} to dictionary");
-                if (!dict.ContainsKey(key))
-                    dict[key] = 0;
-
-                dict[key]++;
-
-                if (!types.ContainsKey(key) || types[key] != type)
-                    UpdateDataType(key);
-            }
-
-            private void RemoveDictEntry(Dictionary<string, int> dict, string key, DataType type)
-            {
-                if (!dict.ContainsKey(key))
-                {
-                    L.Warning($"RemoveDictEntry: trying to remove non-existing key {key} from dictionary");
-                    return;
-                }
-                L.Debug($"RemoveDictEntry: removing key {key} from dictionary");
-                dict[key]--;
-                if (dict[key] == 0)
-                {
-                    dict.Remove(key);
-                    types.Remove(key);
-                }
-                else if (types.ContainsKey(key) && types[key] != type)
-                    UpdateDataType(key);
-            }
-
-            public override void AppendLine(string line)
-            {
-                InsertLine(Lines.Count, line);
-            }
-
-            public override void InsertLine(int index, string line)
-            {
-                L.Debug($"Formatter: insert line at index {index}/{Lines.Count}, text: '{line}'");
-                var ic10line = ParseLine(line) as IC10Line;
-
-                Lines.Insert(index, ic10line);
-
-                if (ic10line.IsLabel)
-                    AddDictEntry(labels, TrimToken(ic10line[0].Text), DataType.Label);
-                else if (ic10line.IsNumAlias)
-                    AddDictEntry(regAliases, ic10line[1].Text, DataType.Number);
-                else if (ic10line.IsDevAlias)
-                    AddDictEntry(devAliases, ic10line[1].Text, DataType.Device);
-                else if (ic10line.IsDefine)
-                    AddDictEntry(defines, ic10line[1].Text, DataType.Number);
-            }
-
-            public override void RemoveLine(int index)
-            {
-                L.Debug($"Formatter: removing line at index {index}/{Lines.Count}");
-                var line = Lines[index] as IC10Line;
-                Lines.RemoveAt(index);
-
-                if (line.Count == 0)
-                    return;
-
-                if (line.IsLabel)
-                    RemoveDictEntry(labels, TrimToken(line[0].Text), DataType.Label);
-                else if (line.IsNumAlias)
-                    RemoveDictEntry(regAliases, line[1].Text, DataType.Number);
-                else if (line.IsDevAlias)
-                    RemoveDictEntry(devAliases, line[1].Text, DataType.Device);
-                else if (line.IsDefine)
-                    RemoveDictEntry(defines, line[1].Text, DataType.Number);
-            }
-
-            // public static void DrawColoredText(List<ColoredTextSegment> input)
-            // {
-            //     var pos = ImGui.GetCursorScreenPos();
-            //     var list = ImGui.GetWindowDrawList();
-            //     foreach (var segment in input)
-            //         list.AddText(
-            //             pos + segment.Pos,
-            //             segment.Color,
-            //             segment.Text);
-            // }
-            //
-            // public static void ParseAndDrawColoredText(string input)
-            // {
-            //     float width = 0.0f;
-            //     DrawColoredText(ParseColoredText(input, ref width));
-            // }
-
-            public static FormattedText ParseColoredText(string input, ref float width)
-            {
-                var result = new FormattedText();
-
-                var lines = input.Split('\n');
-
-                var C = (string color) => ColorFromHTML(color);
-
-                foreach (var line in lines)
-                {
-                    var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
-                    int lastIndex = 0;
-                    int column = 0;
-                    var resultLine = new Line();
-
-                    foreach (Match match in regex.Matches(line))
-                    {
-                        if (match.Index > lastIndex)
-                        {
-                            string rawText = input.Substring(lastIndex, match.Index - lastIndex);
-                            if (!string.IsNullOrEmpty(rawText.Trim()))
-                                resultLine.Add(new Token(rawText, column, C("#ffffff")));
-                            column += rawText.Length;
-                        }
-
-                        string color = match.Groups[1].Value;
-                        string text = match.Groups[2].Value;
-                        if (!string.IsNullOrEmpty(text.Trim()))
-                            resultLine.Add(new Token(text, column, C(color)));
-                        column += text.Length;
-
-                        lastIndex = match.Index + match.Length;
-                    }
-
-                    if (lastIndex < input.Length)
-                    {
-                        var rawText = input.Substring(lastIndex);
-                        if (!string.IsNullOrEmpty(rawText.Trim()))
-                            resultLine.Add(new Token(rawText, column, C("#ffffff")));
-                        column += rawText.Length;
-                    }
-                    result.Add(resultLine);
-                }
-
-
-                return result;
-            }
-
-            private string _suggestion = null;
-
-            public string xxxGetAutocompleteSuggestion()
-            {
-                return _suggestion;
-            }
-
-            public void xxxDrawAutocomplete(IEditor ed, TextPosition caret, Vector2 pos)
-            {
-                if (ed.KeyMode != KeyMode.Insert)
-                    return;
-
-                _suggestion = null;
-                if (!ed.IsWordEnd(caret) && caret.Col < Lines[caret.Line].Length)
-                    return;
-
-                if (char.IsWhiteSpace(ed[caret]))
-                    caret.Col--;
-
-                var token = Lines.GetTokenAtPosition(caret) as IC10Token;
-                if (token == null)
-                    return;
-
-                // if (string.IsNullOrEmpty(token.Tooltip))
-                //     return;
-
-                var line = Lines[caret.Line] as IC10Line;
-                var index = line.IndexOf(token);
-                if (index > 0 && !line[0].IsInstruction)
-                    return;
-
-                IC10.ArgType argType = DataType.Instruction;
-
-                if (index > 0)
-                {
-                    var opcode = IC10Utils.Instructions[line[0].Text];
-                    argType = opcode.ArgumentTypes[index - 1].Compat;
-                }
-
-                var suggestions = new List<string>();
-
-                foreach (var entry in IC10Utils.Types)
-                    if (!entry.Key.StartsWith("rr") && !entry.Key.StartsWith("dr"))
-                        if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text))
-                            suggestions.Add(entry.Key);
-
-                foreach (var entry in types)
-                    if (argType.Has(entry.Value) && entry.Key.StartsWith(token.Text))
-                        suggestions.Add(entry.Key);
-
-                var n = suggestions.Count;
-                if (n == 0)
-                    return;
-
-                if (n == 1 && suggestions[0] == token.Text)
-                    return;
-
-                _suggestion = "";
-
-                string commonPrefix = string.Empty;  // Start with an empty string, not null
-
-                foreach (var suggestion in suggestions)
-                {
-                    var rest = suggestion.Substring(token.Text.Length);
-                    if (string.IsNullOrEmpty(commonPrefix))
-                        commonPrefix = rest;
                     else
                     {
-                        int len = Math.Min(commonPrefix.Length, rest.Length);
-                        int i = 0;
-                        for (; i < len; i++)
-                            if (commonPrefix[i] != rest[i])
-                                break;
-
-                        commonPrefix = commonPrefix.Substring(0, i);
+                        error = "Too many arguments";
                     }
-
-                    if (string.IsNullOrEmpty(commonPrefix))
-                        break;
-                }
-
-                if (string.IsNullOrEmpty(commonPrefix) == false)
-                    _suggestion = commonPrefix;
-
-                var width = 0.0f;
-                const int maxSuggestions = 20;
-                if (n > maxSuggestions)
-                {
-                    suggestions = suggestions.GetRange(0, maxSuggestions);
-                    width = ImGui.CalcTextSize($"... and {n - maxSuggestions} more").x;
-                }
-
-                foreach (var suggestion in suggestions)
-                    width = Math.Max(ImGui.CalcTextSize(suggestion).x, width);
-
-                var completeSize = new Vector2(10.0f + width, 5.0f + LineHeight * (suggestions.Count + (n > maxSuggestions ? 1 : 0)));
-                float bottomSize = ImGui.GetContentRegionAvail().y - LineHeight - 5.0f + ImGui.GetScrollY();
-                if (bottomSize < completeSize.y)
-                {
-                    pos.y -= completeSize.y - bottomSize;
-                    pos.x += CharWidth * 2;
-                }
-
-                var list = ImGui.GetWindowDrawList();
-                list.AddRectFilled(
-                    pos,
-                    pos + completeSize,
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.9f)),
-                    5.0f);
-
-                pos.x += 5.0f;
-                foreach (var suggestion in suggestions)
-                {
-                    list.AddText(
-                        pos,
-                        ICodeFormatter.ColorDefault,
-                        suggestion);
-                    pos.y += LineHeight;
-                }
-
-                if (n > maxSuggestions)
-                {
-                    list.AddText(
-                        pos,
-                        ICodeFormatter.ColorDefault,
-                        $"... and {n - maxSuggestions} more");
                 }
             }
-
-            public override void UpdateStatus()
+            else
             {
-                if (CaretPos.Line < 0 || CaretPos.Line >= Lines.Count)
-                    return;
-
-                var tokenAtCaret = Lines.GetTokenAtPosition(CaretPos) as IC10Token;
-
-                if (tokenAtCaret == null && Lines[CaretPos.Line].Count > 0)
-                    tokenAtCaret = Lines[0][0] as IC10Token;
-
-                if (tokenAtCaret == null)
-                    return;
-
-                var statusLine = new Line();
-
-                if (tokenAtCaret?.Error != null)
-                    statusLine.Add(new Token(tokenAtCaret.Error, 0, ICodeFormatter.ColorError));
-                else if (tokenAtCaret?.Status != null)
-                    statusLine.Add(new Token(tokenAtCaret.Status, 0, ICodeFormatter.ColorDefault));
-                else if (tokenAtCaret?.Tooltip != null)
-                    statusLine.Add(new Token(tokenAtCaret.Tooltip, 0, ICodeFormatter.ColorDefault));
-
-                _status = new FormattedText();
-                _status.Add(statusLine);
-            }
-
-            public override void UpdateTooltip(TextPosition mouseTextPos)
-            {
-                _tooltip = null;
-
-                if (!(bool)mouseTextPos)
-                    return;
-
-                var token = Lines.GetTokenAtPosition(mouseTextPos) as IC10Token;
-
-                if (token == null)
-                    return;
-
-                var tooltip = new FormattedText();
-
-                if (!string.IsNullOrEmpty(token?.Error))
-                    tooltip.Add(new Line(token.Error, ColorError));
-
-                if (!string.IsNullOrEmpty(token?.Tooltip))
-                    tooltip.Add(new Line(token.Tooltip));
-
-                if (token.IsInstruction)
+                if (i == 0)
                 {
-                    if (tooltip.Count > 0)
-                        tooltip.Add(new Line(""));
-                    tooltip.AddRange(IC10Utils.Instructions[token.Text].Tooltip);
+                    if (
+                        dt != DataType.Label
+                        && dt != DataType.Alias
+                        && dt != DataType.Define
+                        && dt != DataType.Comment
+                    )
+                        error = $"Unknown instruction '{txt}'";
                 }
-
-                _tooltip = tooltip;
             }
 
-            public override void UpdateAutocomplete()
-            {
-            }
+            t.Type = (uint)dt;
+            t.Color = error != null ? ColorError : GetColor(dt, txt);
+            t.Background = GetBackgroundColor(dt, txt);
+            t.Data = error ?? tooltip;
+            t.IsError = error != null;
+
+            line.AddToken(t);
         }
+    }
+
+    // Fixed ParseColoredText to return FormattedText (Collection of Lines)
+    public static FormattedText ParseColoredText(string input, ref float width)
+    {
+        var result = new FormattedText();
+        var lines = input.Split('\n');
+        var C = (Func<string, uint>)((string color) => ColorFromHTML(color));
+
+        foreach (var lineStr in lines)
+        {
+            var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
+            int lastIndex = 0;
+
+            // We need to build the "Clean" text for the Line content
+            StringBuilder cleanText = new StringBuilder();
+            // We need to track where semantic tokens map to the clean text
+            List<SemanticToken> tokens = new List<SemanticToken>();
+
+            int currentColumn = 0;
+
+            foreach (Match match in regex.Matches(lineStr))
+            {
+                // Plain text before match
+                if (match.Index > lastIndex)
+                {
+                    string rawText = lineStr.Substring(lastIndex, match.Index - lastIndex);
+                    cleanText.Append(rawText);
+                    // Add a token for plain text with default color
+                    tokens.Add(
+                        new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0)
+                    );
+                    currentColumn += rawText.Length;
+                }
+
+                // Colored text
+                string colorStr = match.Groups[1].Value;
+                string text = match.Groups[2].Value;
+                cleanText.Append(text);
+                tokens.Add(new SemanticToken(0, currentColumn, text.Length, C(colorStr), 0));
+                currentColumn += text.Length;
+
+                lastIndex = match.Index + match.Length;
+            }
+
+            // Plain text after last match
+            if (lastIndex < lineStr.Length)
+            {
+                string rawText = lineStr.Substring(lastIndex);
+                cleanText.Append(rawText);
+                tokens.Add(new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0));
+            }
+
+            // Create the Line with clean text
+            var resultLine = new Line(cleanText.ToString());
+            foreach (var t in tokens)
+                resultLine.AddToken(t);
+
+            result.Add(resultLine);
+        }
+        return result;
+    }
+
+    public void UpdateDataType(string newToken, bool defer = true)
+    {
+        if (newToken != null)
+            _tokensToUpdate.Add(newToken);
+        if (defer)
+            return;
+
+        foreach (var token in _tokensToUpdate)
+        {
+            int count = 0;
+            DataType type = DataType.Unknown;
+            if (defines.ContainsKey(token))
+            {
+                count += defines[token];
+                type = DataType.Number;
+            }
+            if (devAliases.ContainsKey(token))
+            {
+                count++;
+                type = DataType.Device;
+            }
+            if (regAliases.ContainsKey(token))
+            {
+                count++;
+                type = DataType.Register;
+            }
+            if (labels.ContainsKey(TrimToken(token)))
+            {
+                count += labels[token];
+                type = DataType.Label;
+            }
+            if (IC10Utils.Instructions.ContainsKey(token))
+            {
+                count++;
+                type = DataType.Instruction;
+            }
+
+            if (count > 1)
+                type = DataType.Unknown;
+            types[token] = type;
+        }
+        // In a real implementation, we would re-parse affected lines here
+        _tokensToUpdate.Clear();
+    }
+
+    public override void ResetCode(string code)
+    {
+        defines.Clear();
+        regAliases.Clear();
+        devAliases.Clear();
+        labels.Clear();
+        base.ResetCode(code);
+    }
+
+    public override void InsertLine(int index, string line)
+    {
+        base.InsertLine(index, line);
+        TrackAliases(line, true);
+    }
+
+    public override void RemoveLine(int index)
+    {
+        if (index < 0 || index >= Lines.Count)
+            return;
+        string lineText = Lines[index].Text;
+        base.RemoveLine(index);
+        TrackAliases(lineText, false);
+    }
+
+    private void TrackAliases(string line, bool add)
+    {
+        string[] parts = line.Split(
+            new char[] { ' ', '\t' },
+            StringSplitOptions.RemoveEmptyEntries
+        );
+        if (parts.Length == 0)
+            return;
+        string cmd = parts[0];
+        if (cmd == "alias" && parts.Length >= 3)
+        {
+            string name = parts[1];
+            string target = parts[2];
+            if (target.StartsWith("d"))
+                UpdateDict(devAliases, name, add);
+            else
+                UpdateDict(regAliases, name, add);
+            UpdateDataType(name, false);
+        }
+        else if (cmd == "define" && parts.Length >= 3)
+        {
+            string name = parts[1];
+            UpdateDict(defines, name, add);
+            UpdateDataType(name, false);
+        }
+        else if (cmd.EndsWith(":"))
+        {
+            string label = TrimToken(cmd);
+            UpdateDict(labels, label, add);
+            UpdateDataType(label, false);
+        }
+    }
+
+    private void UpdateDict(Dictionary<string, int> dict, string key, bool add)
+    {
+        if (!dict.ContainsKey(key))
+            dict[key] = 0;
+        if (add)
+            dict[key]++;
+        else
+            dict[key]--;
+        if (dict[key] <= 0)
+            dict.Remove(key);
     }
 }

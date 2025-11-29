@@ -1,21 +1,19 @@
 namespace StationeersIC10Editor
 {
-    using Assets.Scripts.Networking.Transports;
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using Assets.Scripts;
     using Assets.Scripts.Networking;
+    using Assets.Scripts.Networking.Transports;
     using Assets.Scripts.Objects.Motherboards;
     using Assets.Scripts.UI;
-    using Assets.Scripts;
     using BepInEx.Configuration;
     using Cysharp.Threading.Tasks;
     using ImGuiNET;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System;
-    using System.Text;
     using UnityEngine;
-
-    using static Utils;
     using static Settings;
+    using static Utils;
 
     public class ConfirmWindow
     {
@@ -47,7 +45,13 @@ namespace StationeersIC10Editor
         public void Draw()
         {
             bool open = true;
-            if (ImGui.BeginPopupModal("Confirm", ref open, ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize))
+            if (
+                ImGui.BeginPopupModal(
+                    "Confirm",
+                    ref open,
+                    ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.AlwaysAutoResize
+                )
+            )
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, ICodeFormatter.ColorWarning);
                 ImGui.Text(Message);
@@ -61,7 +65,12 @@ namespace StationeersIC10Editor
                 ImGui.SameLine();
 
                 var pos = ImGui.GetCursorPos();
-                var space = ImGui.GetContentRegionAvail().x - Scale * 100 - Scale * ImGui.GetStyle().FramePadding.x - ImGui.GetStyle().ItemSpacing.x - Scale * 10;
+                var space =
+                    ImGui.GetContentRegionAvail().x
+                    - Scale * 100
+                    - Scale * ImGui.GetStyle().FramePadding.x
+                    - ImGui.GetStyle().ItemSpacing.x
+                    - Scale * 10;
 
                 ImGui.SetCursorPos(new Vector2(pos.x + space, pos.y));
 
@@ -104,7 +113,6 @@ namespace StationeersIC10Editor
         public int Direction => Forward ? 1 : -1;
         public int SignedAmount => (int)(Direction * Amount);
 
-
         public MoveAction(MoveToken token = MoveToken.Char, bool forward = true, uint amount = 0)
         {
             Token = token;
@@ -119,8 +127,6 @@ namespace StationeersIC10Editor
         {
             return char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '-';
         }
-
-
     }
 
     public static class Settings
@@ -139,7 +145,6 @@ namespace StationeersIC10Editor
 
         public const string LimitExceededMessage = "Size limit exceeded: cannot save or export.";
 
-
         private static float _lastScale = -1.0f;
         private static float _lastLineSpacingOffset = -1.0f;
         private static float _charWidth = 0.0f;
@@ -154,14 +159,18 @@ namespace StationeersIC10Editor
             if (Scale == _lastScale && LineSpacingOffset == _lastLineSpacingOffset)
                 return;
 
-            string s = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
+            string s =
+                "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
 
             var size = ImGui.CalcTextSize(s);
 
             _lineHeight = Mathf.Ceil(size.y / 100.0f + LineSpacingOffset);
             _charWidth = size.x / 100.0f;
 
-            _lineSpacing = ImGui.GetTextLineHeightWithSpacing() - ImGui.GetTextLineHeight() + LineSpacingOffset;
+            _lineSpacing =
+                ImGui.GetTextLineHeightWithSpacing()
+                - ImGui.GetTextLineHeight()
+                + LineSpacingOffset;
             _lastScale = Scale;
             _lastLineSpacingOffset = LineSpacingOffset;
         }
@@ -176,7 +185,8 @@ namespace StationeersIC10Editor
         bool IsMotherboard => PCM != null;
         public bool EnforceLineLimit => Settings.EnforceLineLimit && IsMotherboard;
         public bool EnforceByteLimit => Settings.EnforceByteLimit && IsMotherboard;
-        public bool LimitExceeded => (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
+        public bool LimitExceeded =>
+            (EnforceLineLimit && Lines.Count > 128) || (EnforceByteLimit && Code.Length > 4096);
 
         public bool HaveSelection => (bool)Selection;
         public KeyHandler KeyHandler;
@@ -245,11 +255,7 @@ namespace StationeersIC10Editor
 
         public string CurrentLine
         {
-            get
-            {
-                return Lines[CaretLine].Text;
-            }
-
+            get { return Lines[CaretLine].Text; }
             set
             {
                 if (value == Lines[CaretLine].Text)
@@ -262,9 +268,14 @@ namespace StationeersIC10Editor
         {
             get
             {
-                return new EditorState { Code = Code, FormattedText = CodeFormatter.Lines, CaretPos = CaretPos, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+                return new EditorState
+                {
+                    Code = Code,
+                    FormattedText = CodeFormatter.Lines,
+                    CaretPos = CaretPos,
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                };
             }
-
             set
             {
                 CodeFormatter.Lines = value.FormattedText;
@@ -351,7 +362,6 @@ namespace StationeersIC10Editor
             CodeFormatter.InsertLine(lineIndex, newLine);
             _isCodeChanged = true;
         }
-
 
         public bool IsWordBeginning(TextPosition pos)
         {
@@ -489,7 +499,11 @@ namespace StationeersIC10Editor
             return FindNonWhitespace(pos, forward);
         }
 
-        public TextPosition FindString(TextPosition startPos, string searchTerm, bool forward = true)
+        public TextPosition FindString(
+            TextPosition startPos,
+            string searchTerm,
+            bool forward = true
+        )
         {
             if (forward)
                 return FindStringForward(startPos, searchTerm);
@@ -514,7 +528,6 @@ namespace StationeersIC10Editor
             }
 
             return new TextPosition(-1, -1);
-
         }
 
         private TextPosition FindStringBackward(TextPosition startPos, string searchTerm)
@@ -526,7 +539,8 @@ namespace StationeersIC10Editor
             {
                 string line = Lines[lineIndex].Text;
 
-                if (colIndex >= line.Length) colIndex = line.Length - 1;
+                if (colIndex >= line.Length)
+                    colIndex = line.Length - 1;
                 if (colIndex < 0)
                 {
                     lineIndex--;
@@ -547,7 +561,6 @@ namespace StationeersIC10Editor
 
             return new TextPosition(-1, -1);
         }
-
 
         public char this[TextPosition pos]
         {
@@ -594,7 +607,8 @@ namespace StationeersIC10Editor
             int horizontal = 0,
             int vertical = 0,
             bool isRelative = true,
-            bool isSelecting = false)
+            bool isSelecting = false
+        )
         {
             Selection.Reset();
             TextPosition newPos = CaretPos;
@@ -741,9 +755,9 @@ namespace StationeersIC10Editor
                 {
                     string line = Lines[start.Line].Text;
                     string newLine =
-                        line.Substring(0, start.Col) + line.Substring(end.Col, line.Length - end.Col);
+                        line.Substring(0, start.Col)
+                        + line.Substring(end.Col, line.Length - end.Col);
                     ReplaceLine(start.Line, newLine);
-
                 }
             }
             else
@@ -781,7 +795,9 @@ namespace StationeersIC10Editor
         public TextRange GetWordAt(TextPosition pos)
         {
             bool isWordChar = IsWordChar(this[pos]);
-            bool IsWordBeginning = pos.Col == 0 || (isWordChar && !IsWordChar(this[new TextPosition(pos.Line, pos.Col - 1)]));
+            bool IsWordBeginning =
+                pos.Col == 0
+                || (isWordChar && !IsWordChar(this[new TextPosition(pos.Line, pos.Col - 1)]));
 
             var startPos = IsWordBeginning ? pos : FindWordBeginning(pos, !isWordChar);
             var endPos = FindWordEnd(pos, isWordChar);
@@ -904,7 +920,9 @@ namespace StationeersIC10Editor
             }
             if (InstructionData != null)
             {
-                _confirmWindow = new ConfirmWindow($"Are you sure to overwrite the code in Library '{InstructionData.Title}'?");
+                _confirmWindow = new ConfirmWindow(
+                    $"Are you sure to overwrite the code in Library '{InstructionData.Title}'?"
+                );
                 _confirmWindow.OnConfirm = () =>
                 {
                     InstructionData.Instructions = Code;
@@ -915,7 +933,6 @@ namespace StationeersIC10Editor
             }
             return "Error: No target to save to.";
         }
-
 
         public void Update()
         {
@@ -929,7 +946,6 @@ namespace StationeersIC10Editor
 
     public class EditorWindow
     {
-
         IEditor Editor;
         public KeyMode KeyMode;
         public static bool UseNativeEditor = false;
@@ -965,20 +981,21 @@ namespace StationeersIC10Editor
 
         private bool Show = false;
 
-        private Dictionary<string, InstructionData> _libraryCodes = new Dictionary<string, InstructionData>();
+        private Dictionary<string, InstructionData> _libraryCodes =
+            new Dictionary<string, InstructionData>();
         private List<InstructionData> _librarySearchResults = new List<InstructionData>();
 
         private bool _librarySearchVisible = false;
         private string _librarySearchText = "";
-
 
         private bool _librarySearchJustOpened = false;
         private int _librarySelectedIndex = -1;
 
         public async UniTaskVoid LoadLibraries()
         {
-
-            var items = await NetworkManager.GetLocalAndWorkshopItems(SteamTransport.WorkshopType.ICCode);
+            var items = await NetworkManager.GetLocalAndWorkshopItems(
+                SteamTransport.WorkshopType.ICCode
+            );
 
             var libs = new Dictionary<string, InstructionData>();
 
@@ -1012,7 +1029,9 @@ namespace StationeersIC10Editor
                 return;
 
             bool open = true;
-            if (ImGui.BeginPopupModal("Library Search", ref open, ImGuiWindowFlags.AlwaysAutoResize))
+            if (
+                ImGui.BeginPopupModal("Library Search", ref open, ImGuiWindowFlags.AlwaysAutoResize)
+            )
             {
                 if (_librarySearchJustOpened)
                 {
@@ -1023,12 +1042,20 @@ namespace StationeersIC10Editor
                 ImGui.Text("Search libraries:");
                 ImGui.SameLine();
                 string oldSearchText = _librarySearchText;
-                ImGui.InputText("##LibrarySearch", ref _librarySearchText, 256, ImGuiInputTextFlags.EnterReturnsTrue);
+                ImGui.InputText(
+                    "##LibrarySearch",
+                    ref _librarySearchText,
+                    256,
+                    ImGuiInputTextFlags.EnterReturnsTrue
+                );
                 if (oldSearchText != _librarySearchText)
                     PerformLibrarySearch(_librarySearchText);
 
                 // Search if Enter pressed or text changed
-                if (ImGui.IsItemDeactivatedAfterEdit() || ImGui.IsItemFocused() && ImGui.IsKeyPressed(ImGuiKey.Enter))
+                if (
+                    ImGui.IsItemDeactivatedAfterEdit()
+                    || ImGui.IsItemFocused() && ImGui.IsKeyPressed(ImGuiKey.Enter)
+                )
                 {
                     if (_librarySearchResults.Count > 0)
                     {
@@ -1060,7 +1087,6 @@ namespace StationeersIC10Editor
                     ShowNativeWindow(HelpMode.Instructions);
                 }
 
-
                 ImGui.Separator();
 
                 // Show results
@@ -1089,7 +1115,10 @@ namespace StationeersIC10Editor
                         }
 
                         // Double-click to load
-                        if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                        if (
+                            ImGui.IsItemHovered()
+                            && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left)
+                        )
                         {
                             LoadLibraryEntry(lib);
                             _librarySearchVisible = false;
@@ -1098,7 +1127,9 @@ namespace StationeersIC10Editor
                     }
                     ImGui.EndChild();
 
-                    ImGui.Text("Load first found entry with Enter key, or any entry with double-click.");
+                    ImGui.Text(
+                        "Load first found entry with Enter key, or any entry with double-click."
+                    );
                 }
 
                 ImGui.Separator();
@@ -1112,7 +1143,6 @@ namespace StationeersIC10Editor
                     _librarySearchVisible = false;
                     ImGui.CloseCurrentPopup();
                 }
-
 
                 ImGui.EndPopup();
             }
@@ -1134,8 +1164,11 @@ namespace StationeersIC10Editor
 
             foreach (var kvp in _libraryCodes)
             {
-                if (string.IsNullOrEmpty(q) || kvp.Key.ToLowerInvariant().Contains(q) ||
-                    kvp.Value.Instructions.ToLowerInvariant().Contains(q))
+                if (
+                    string.IsNullOrEmpty(q)
+                    || kvp.Key.ToLowerInvariant().Contains(q)
+                    || kvp.Value.Instructions.ToLowerInvariant().Contains(q)
+                )
                 {
                     _librarySearchResults.Add(kvp.Value);
                 }
@@ -1202,7 +1235,6 @@ namespace StationeersIC10Editor
         {
             if (IsMotherboard)
             {
-
                 if (LimitExceeded)
                 {
                     ActiveTab.CommandStatus = LimitExceededMessage;
@@ -1218,6 +1250,7 @@ namespace StationeersIC10Editor
                 _activeTabIndex = 0;
             }
         }
+
         public void HideWindow()
         {
             if (Show == false)
@@ -1254,6 +1287,7 @@ namespace StationeersIC10Editor
         }
 
         public bool IsInitialized = false;
+
         public void SetTitle(string title)
         {
             Title = title;
@@ -1316,7 +1350,14 @@ namespace StationeersIC10Editor
 
             float comboWidth = 130;
 
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - comboWidth - 3 * smallButtonSize.x - buttonSize.x - ImGui.GetStyle().FramePadding.x * 4 - ImGui.GetStyle().ItemSpacing.x * 3);
+            ImGui.SetCursorPosX(
+                ImGui.GetWindowWidth()
+                    - comboWidth
+                    - 3 * smallButtonSize.x
+                    - buttonSize.x
+                    - ImGui.GetStyle().FramePadding.x * 4
+                    - ImGui.GetStyle().ItemSpacing.x * 3
+            );
 
             bool isIC10 = ActiveTab.CodeFormatter as IC10.IC10CodeFormatter != null;
 
@@ -1378,27 +1419,33 @@ namespace StationeersIC10Editor
         public void DrawFooter()
         {
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
-            ImGui.Text($"{CaretLine,3}/{CaretCol,2},");
+            ImGui.Text($"{CaretLine, 3}/{CaretCol, 2},");
             ImGui.SameLine();
 
             var pos = ImGui.GetCursorScreenPos();
             var code = Code;
 
-            var sLines = $"{Lines.Count,3}";
-            var sBytes = $"{code.Length+Lines.Count-1,4}";
+            var sLines = $"{Lines.Count, 3}";
+            var sBytes = $"{code.Length + Lines.Count - 1, 4}";
 
             uint lineColor = _colorDefault;
             if (EnforceLineLimit)
             {
                 sLines += "/128";
-                lineColor = Lines.Count < 120 ? _colorGood : (Lines.Count <= 128 ? _colorWarning : _colorBad);
+                lineColor =
+                    Lines.Count < 120
+                        ? _colorGood
+                        : (Lines.Count <= 128 ? _colorWarning : _colorBad);
             }
 
             uint byteColor = _colorDefault;
             if (EnforceByteLimit)
             {
                 sBytes += "/4096";
-                byteColor = code.Length < 4000 ? _colorGood : (code.Length <= 4096 ? _colorWarning : _colorBad);
+                byteColor =
+                    code.Length < 4000
+                        ? _colorGood
+                        : (code.Length <= 4096 ? _colorWarning : _colorBad);
             }
 
             var drawList = ImGui.GetWindowDrawList();
@@ -1412,7 +1459,12 @@ namespace StationeersIC10Editor
 
             ImGui.SameLine();
 
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 3 * buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x);
+            ImGui.SetCursorPosX(
+                ImGui.GetWindowWidth()
+                    - 3 * buttonSize.x
+                    - ImGui.GetStyle().FramePadding.x * 3
+                    - ImGui.GetStyle().ItemSpacing.x
+            );
             if (ImGui.Button("Cancel", buttonSize))
                 HideWindow();
 
@@ -1430,10 +1482,11 @@ namespace StationeersIC10Editor
             if (ImGui.IsItemHovered())
             {
                 ImGui.BeginTooltip();
-                ImGui.Text(IsMotherboard ?
-              "Close the editor and export the code to IC10 Chip." :
-              "Apply code to the Motherboard tab"
-                    );
+                ImGui.Text(
+                    IsMotherboard
+                        ? "Close the editor and export the code to IC10 Chip."
+                        : "Apply code to the Motherboard tab"
+                );
                 ImGui.EndTooltip();
             }
 
@@ -1461,8 +1514,8 @@ namespace StationeersIC10Editor
             ImGui.PopStyleVar();
         }
 
-
-        private Vector2 _textAreaOrigin, _textAreaSize;
+        private Vector2 _textAreaOrigin,
+            _textAreaSize;
         private float _scrollY = 0.0f;
 
         public bool IsMouseInsideTextArea()
@@ -1483,21 +1536,28 @@ namespace StationeersIC10Editor
             Editor.Update();
             CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
             var padding = ImGui.GetStyle().FramePadding;
-            float scrollHeight = ImGui.GetContentRegionAvail().y - 2 * ImGui.GetTextLineHeightWithSpacing() - 2 * padding.y;
+            float scrollHeight =
+                ImGui.GetContentRegionAvail().y
+                - 2 * ImGui.GetTextLineHeightWithSpacing()
+                - 2 * padding.y;
             ImGui.BeginChild("ScrollRegion", new Vector2(0, scrollHeight), true);
             _textAreaOrigin = ImGui.GetCursorScreenPos();
             _textAreaSize = ImGui.GetContentRegionAvail() + 2 * padding;
 
             var linePos = _textAreaOrigin;
             linePos.x += 4.3f * CharWidth;
-            ImGui.GetWindowDrawList().AddLine(
-                linePos,
-                new Vector2(linePos.x, linePos.y + LineHeight * Lines.Count),
-                ICodeFormatter.ColorLineNumber,
-                1.5f);
+            ImGui
+                .GetWindowDrawList()
+                .AddLine(
+                    linePos,
+                    new Vector2(linePos.x, linePos.y + LineHeight * Lines.Count),
+                    ICodeFormatter.ColorLineNumber,
+                    1.5f
+                );
 
             ImGuiListClipperPtr clipper = new ImGuiListClipperPtr(
-                ImGuiNative.ImGuiListClipper_ImGuiListClipper());
+                ImGuiNative.ImGuiListClipper_ImGuiListClipper()
+            );
 
             clipper.Begin(Lines.Count);
 
@@ -1544,7 +1604,8 @@ namespace StationeersIC10Editor
                     if (i == CaretLine)
                     {
                         _caretPixelPos = pos;
-                        _caretPixelPos.x += CharWidth * (CaretCol + ICodeFormatter.LineNumberOffset);
+                        _caretPixelPos.x +=
+                            CharWidth * (CaretCol + ICodeFormatter.LineNumberOffset);
                         DrawCaret(_caretPixelPos);
                     }
                     if (_firstLineIndex == -1)
@@ -1589,7 +1650,8 @@ namespace StationeersIC10Editor
                         pos,
                         new Vector2(pos.x, pos.y + height),
                         ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, 1)),
-                        1.5f);
+                        1.5f
+                    );
                 }
             }
             else
@@ -1598,11 +1660,13 @@ namespace StationeersIC10Editor
                 drawList.AddRect(
                     new Vector2(pos.x - 1, pos.y - 1),
                     new Vector2(pos.x + CharWidth, pos.y + height),
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f)));
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f))
+                );
                 drawList.AddRect(
                     new Vector2(pos.x - 2, pos.y - 2),
                     new Vector2(pos.x + 1 + CharWidth, pos.y + height + 1),
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f)));
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f))
+                );
             }
         }
 
@@ -1610,7 +1674,6 @@ namespace StationeersIC10Editor
         private int _openGameWindows = 0;
         private Vector2 _windowPos = new Vector2(100, 100);
         private bool _didGameWindowOpen = false;
-
 
         public bool HasFocus => _hasFocus && !_librarySearchVisible;
 
@@ -1640,7 +1703,8 @@ namespace StationeersIC10Editor
 
         public void Draw()
         {
-            if (!Show) return;
+            if (!Show)
+                return;
 
             if (_debugWindowVisible)
                 _renderStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -1657,7 +1721,8 @@ namespace StationeersIC10Editor
                 var displaySize = ImGui.GetIO().DisplaySize;
                 var windowSize = new Vector2(
                     Math.Min(1200, displaySize.x - 100),
-                    displaySize.y - 100);
+                    displaySize.y - 100
+                );
                 var _windowPos = 0.5f * (displaySize - windowSize);
 
                 _windowPos.x = Mathf.Round(_windowPos.x);
@@ -1697,7 +1762,12 @@ namespace StationeersIC10Editor
                 {
                     var tab = Tabs[i];
                     bool isOpen = _activeTabIndex == i;
-                    if (ImGui.BeginTabItem($"{tab.Title} ###{i}", isOpen ? ImGuiTabItemFlags.SetSelected : 0))
+                    if (
+                        ImGui.BeginTabItem(
+                            $"{tab.Title} ###{i}",
+                            isOpen ? ImGuiTabItemFlags.SetSelected : 0
+                        )
+                    )
                     {
                         if (ImGui.IsItemClicked(ImGuiMouseButton.Middle))
                             CloseTab(i);
@@ -1727,7 +1797,8 @@ namespace StationeersIC10Editor
                 if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
                 {
                     var pos = GetTextPositionFromMouse(false);
-                    if (pos) CodeFormatter.DrawTooltip(ImGui.GetMousePos());
+                    if (pos)
+                        CodeFormatter.DrawTooltip(ImGui.GetMousePos());
                 }
                 ImGui.PopFont();
             }
@@ -1748,12 +1819,13 @@ namespace StationeersIC10Editor
             Tabs.RemoveAt(index);
             if (_activeTabIndex >= Tabs.Count)
                 _activeTabIndex = Tabs.Count - 1;
-
         }
+
         public void PreviousTab()
         {
             _activeTabIndex = (_activeTabIndex - 1 + Tabs.Count) % Tabs.Count;
         }
+
         public void NextTab()
         {
             _activeTabIndex = (_activeTabIndex + 1) % Tabs.Count;
@@ -1815,12 +1887,16 @@ namespace StationeersIC10Editor
                 return;
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.2f, 0.2f, 0.2f, 1.0f));
             ImGui.SetNextWindowSize(Scale * new Vector2(600, 400), ImGuiCond.FirstUseEver);
-            ImGui.Begin("IC10 Editor Help", ref _helpWindowVisible, ImGuiWindowFlags.NoSavedSettings);
+            ImGui.Begin(
+                "IC10 Editor Help",
+                ref _helpWindowVisible,
+                ImGuiWindowFlags.NoSavedSettings
+            );
             ImGui.SetWindowFontScale(Mathf.Clamp(Scale, 0.5f, 5.0f));
 
             ImGui.TextWrapped(
-                        "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features.\n\n");
-
+                "This is the IC10 Editor. It allows you to edit the source code of IC10 programs with syntax highlighting, undo/redo, and other features.\n\n"
+            );
 
             ImGui.Separator();
             ImGui.Text("\nConfiguration:");
@@ -1831,62 +1907,65 @@ namespace StationeersIC10Editor
             DrawIntOption("Line Spacing Offset", IC10EditorPlugin.LineSpacingOffset);
             DrawFloatOption("Toolitp delay (ms)", IC10EditorPlugin.TooltipDelay);
             DrawBoolOption("VIM bindings", IC10EditorPlugin.VimBindings);
-            DrawBoolOption("Auto Completion (insert with Tab key)", IC10EditorPlugin.EnableAutoComplete);
+            DrawBoolOption(
+                "Auto Completion (insert with Tab key)",
+                IC10EditorPlugin.EnableAutoComplete
+            );
             ImGui.Checkbox("Show debug window", ref _debugWindowVisible);
 
             ImGui.Separator();
 
             ImGui.TextWrapped(
-                "\nKeyboard Shortcuts:\n" +
-                "\n" +
-                "Arrow Keys            Move caret\n" +
-                "Home/End              Move caret to start/end of line\n" +
-                "Page Up/Down          Move caret up/down by 20 lines\n" +
-                "Shift+Arrow           Select text while moving caret\n" +
-                "Tab                   Autocomplete/Indent\n" +
-                "Ctrl + Q              Quit (no confirm, see note below)\n" +
-                "Ctrl + W              Close tab (only for library code tabs)\n" +
-                "Ctrl + S              Save\n" +
-                "Ctrl + E              Motherboard: Save + export code to ic chip\n" +
-                "Ctrl + E              Library Tab: Apply code to Motherboard tab\n" +
-                "Ctrl + Z              Undo\n" +
-                "Ctrl + Y              Redo\n" +
-                "Ctrl + C              Copy selected code\n" +
-                "Ctrl + V              Paste code from clipboard\n" +
-                "Ctrl + A              Select all code\n" +
-                "Ctrl + X              Cut selected code\n" +
-                "Ctrl + Arrow          Move caret by word\n" +
-                "Ctrl + Click          Open Stationpedia page of word at cursor\n" +
-                "Ctrl + Space          Next tab\n" +
-                "Ctrl + Shift + Space  Previous tab\n" +
-                "Ctrl + Number         Switch to tab <Number>\n\n"
-                );
+                "\nKeyboard Shortcuts:\n"
+                    + "\n"
+                    + "Arrow Keys            Move caret\n"
+                    + "Home/End              Move caret to start/end of line\n"
+                    + "Page Up/Down          Move caret up/down by 20 lines\n"
+                    + "Shift+Arrow           Select text while moving caret\n"
+                    + "Tab                   Autocomplete/Indent\n"
+                    + "Ctrl + Q              Quit (no confirm, see note below)\n"
+                    + "Ctrl + W              Close tab (only for library code tabs)\n"
+                    + "Ctrl + S              Save\n"
+                    + "Ctrl + E              Motherboard: Save + export code to ic chip\n"
+                    + "Ctrl + E              Library Tab: Apply code to Motherboard tab\n"
+                    + "Ctrl + Z              Undo\n"
+                    + "Ctrl + Y              Redo\n"
+                    + "Ctrl + C              Copy selected code\n"
+                    + "Ctrl + V              Paste code from clipboard\n"
+                    + "Ctrl + A              Select all code\n"
+                    + "Ctrl + X              Cut selected code\n"
+                    + "Ctrl + Arrow          Move caret by word\n"
+                    + "Ctrl + Click          Open Stationpedia page of word at cursor\n"
+                    + "Ctrl + Space          Next tab\n"
+                    + "Ctrl + Shift + Space  Previous tab\n"
+                    + "Ctrl + Number         Switch to tab <Number>\n\n"
+            );
 
             ImGui.Separator();
 
             ImGui.TextWrapped(
-                "\nNotes:\n" +
-                "\n" +
-                "Closing the editor via Ctrl+Q key or Cancel button will not ask for confirmation, BUT you can always reopen the editor and Undo (Ctrl+Z) to get the state before cancelling.\n"
-                );
+                "\nNotes:\n"
+                    + "\n"
+                    + "Closing the editor via Ctrl+Q key or Cancel button will not ask for confirmation, BUT you can always reopen the editor and Undo (Ctrl+Z) to get the state before cancelling.\n"
+            );
 
             ImGui.Separator();
 
             ImGui.TextWrapped(
-                "\nVIM Mode - Supported Commands:\n" +
-                "\n" +
-                "Movements (with optional number prefix):\n" +
-                "h j, k, l, w, b, 0, $, gg, G, *, #, <C-u>, <C-d>\n\n" +
-                "Editing (with optional number and movement or search):\n" +
-                "i I a A c C d D dd o O x y yy p ~ << >> u <C-r>\n\n" +
-                "Search:\n" +
-                "f t gf\n\n" +
-                "Other:\n" +
-                ". ; n N :w :wq :q\n\n" +
-                "Notes:\n" +
-                "'gf' opens Stationpedia page of hash/name at cursor\n\n" +
-                "'.'  is not working for commands that switch to insert mode\n\n"
-                );
+                "\nVIM Mode - Supported Commands:\n"
+                    + "\n"
+                    + "Movements (with optional number prefix):\n"
+                    + "h j, k, l, w, b, 0, $, gg, G, *, #, <C-u>, <C-d>\n\n"
+                    + "Editing (with optional number and movement or search):\n"
+                    + "i I a A c C d D dd o O x y yy p ~ << >> u <C-r>\n\n"
+                    + "Search:\n"
+                    + "f t gf\n\n"
+                    + "Other:\n"
+                    + ". ; n N :w :wq :q\n\n"
+                    + "Notes:\n"
+                    + "'gf' opens Stationpedia page of hash/name at cursor\n\n"
+                    + "'.'  is not working for commands that switch to insert mode\n\n"
+            );
 
             ImGui.Separator();
             ImGui.End();
@@ -1900,7 +1979,11 @@ namespace StationeersIC10Editor
 
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.2f, 0.2f, 0.2f, 1.0f));
             ImGui.SetNextWindowSize(Scale * new Vector2(600, 400), ImGuiCond.FirstUseEver);
-            ImGui.Begin("IC10 Debug Window", ref _debugWindowVisible, ImGuiWindowFlags.NoSavedSettings);
+            ImGui.Begin(
+                "IC10 Debug Window",
+                ref _debugWindowVisible,
+                ImGuiWindowFlags.NoSavedSettings
+            );
             ImGui.SetWindowFontScale(Mathf.Clamp(Scale, 0.5f, 5.0f));
 
             double avgRenderTime = 0.0;
@@ -1920,14 +2003,20 @@ namespace StationeersIC10Editor
 
             ImGui.Text($"Render Time: {avgRenderTime:F0} us avg, {maxRenderTime:F0} us max");
             ImGui.Text($"ScrollY: {_scrollY:F2}");
-            ImGui.Text($"Textpos: {_textAreaOrigin.x:F2}, {_textAreaOrigin.y:F2}, {_textAreaOrigin.y + _scrollY:F2}");
+            ImGui.Text(
+                $"Textpos: {_textAreaOrigin.x:F2}, {_textAreaOrigin.y:F2}, {_textAreaOrigin.y + _scrollY:F2}"
+            );
             ImGui.Text($"Textsize: {_textAreaSize.x:F2}, {_textAreaSize.y:F2}");
             ImGui.Text($"Windowpos: {_windowPos.x:F2}, {_windowPos.y:F2}");
             ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
             ImGui.Text($"MousePos: {ImGui.GetMousePos().x:F2}, {ImGui.GetMousePos().y:F2}");
-            ImGui.Text($"Mouse relative to text area: {ImGui.GetMousePos().x - _textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (_textAreaOrigin.y + _scrollY):F2}");
+            ImGui.Text(
+                $"Mouse relative to text area: {ImGui.GetMousePos().x - _textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (_textAreaOrigin.y + _scrollY):F2}"
+            );
             ImGui.Text($"Mouse caret pos: {GetTextPositionFromMouse(false)}");
-            ImGui.Text($"Mouse line: {(ImGui.GetMousePos().y - _textAreaOrigin.y) / LineHeight:F2}");
+            ImGui.Text(
+                $"Mouse line: {(ImGui.GetMousePos().y - _textAreaOrigin.y) / LineHeight:F2}"
+            );
             ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
             // ImGui.Text($"Autocomplete suggestion: {CodeFormatter.GetAutocompleteSuggestion()}");
             ImGui.Text($"Font w/h: {CharWidth:F2}, {LineHeight:F2}");
@@ -1945,13 +2034,16 @@ namespace StationeersIC10Editor
 
         private int _firstLineIndex = -1;
         private float _firstLineY = -1.0f;
+
         public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
         {
             Vector2 mousePos = ImGui.GetMousePos();
 
-            int line = (int)((mousePos.y + LineSpacing - _firstLineY) / LineHeight) + _firstLineIndex;
-            int column =
-                (int)((mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset);
+            int line =
+                (int)((mousePos.y + LineSpacing - _firstLineY) / LineHeight) + _firstLineIndex;
+            int column = (int)(
+                (mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset
+            );
 
             if (!clampToTextArea && (line < 0 || line >= Lines.Count))
             {
@@ -1964,5 +2056,4 @@ namespace StationeersIC10Editor
             return new TextPosition(line, column);
         }
     }
-
 }

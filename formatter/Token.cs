@@ -1,61 +1,72 @@
-namespace StationeersIC10Editor;
-
-public class Token
+namespace StationeersIC10Editor
 {
-    public string Text;
-    public int Column;
-    public uint Color;
-    public uint Background;
-    public string Tooltip;
-    public string Error;
-    public string Status;
-
-    public Token(
-        string text,
-        int column,
-        uint color = 0xFFFFFFFF,
-        uint background = 0,
-        string tooltip = null,
-        string error = null
-    )
+    // The Token class is kept for backward compatibility if other parts of the system
+    // rely on it, but the new system uses SemanticToken struct primarily.
+    public class Token
     {
-        Text = text;
-        Column = column;
-        Color = color;
-        Background = background;
-        Tooltip = tooltip;
-        Error = error;
-    }
-}
+        public string Text;
+        public int Column;
+        public uint Color;
+        public uint Background;
+        public string Tooltip;
+        public string Error;
+        public string Status;
 
-/**
- * <summary>This is a thin struct which represents metadata about text at a specific
- * column and line. This also might contain tooltip text.
- * </summary>
- */
-public struct SemanticToken
-{
-    public uint Column;
-    public uint Length;
-    public uint Line;
-    public uint TokenType;
-
-#nullable enable
-    public string? TooltipData;
-
-#nullable disable
-
-    public SemanticToken(uint column, uint length, uint line, uint type)
-    {
-        Column = column;
-        Line = line;
-        Length = length;
-        TokenType = type;
+        public Token(
+            string text,
+            int column,
+            uint color = 0xFFFFFFFF,
+            uint background = 0,
+            string tooltip = null,
+            string error = null
+        )
+        {
+            Text = text;
+            Column = column;
+            Color = color;
+            Background = background;
+            Tooltip = tooltip;
+            Error = error;
+        }
     }
 
-    public SemanticToken(uint column, uint line, uint length, uint type, string tooltipData)
-        : this(column, length, line, type)
+    /// <summary>
+    /// Represents a lightweight pointer to a range in the source buffer.
+    /// Does NOT hold the text content itself.
+    /// </summary>
+    public struct SemanticToken
     {
-        TooltipData = tooltipData;
+        public int Line; // Line index (0-based)
+        public int Column; // Start column index (0-based)
+        public int Length; // Length of the token
+        public uint Color; // Render color (ARGB)
+        public uint Background; // Background color (ARGB)
+        public uint Type; // Semantic Type ID (mapped to DataType usually)
+
+        // Metadata for tooltips/errors, managed via dictionary or side-channel in a real LSP,
+        // but stored here for simplicity in this hybrid approach.
+        public string Data;
+        public bool IsError;
+
+        public SemanticToken(
+            int line,
+            int column,
+            int length,
+            uint color,
+            uint type,
+            uint background = 0,
+            string data = null,
+            bool isError = false
+        )
+        {
+            Line = line;
+            Column = column;
+            Length = length;
+            Color = color;
+            Type = type;
+            Background = background;
+            Data = data;
+            IsError = isError;
+        }
     }
 }

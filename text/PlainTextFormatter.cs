@@ -1,11 +1,11 @@
-namespace StationeersIC10Editor
+namespace StationeersIC10Editor;
+
+public class PlainTextFormatter : ICodeFormatter
 {
-    public class PlainTextFormatter : ICodeFormatter
+    public override Line ParseLine(string line)
     {
-        public override Line ParseLine(string line)
-        {
-            // every line is a single token with no special formatting
-            return new Line(line);
-        }
+        var l = new Line(line);
+        // Plain text has no semantic tokens, so it will be drawn using the default logic (white/default color).
+        return l;
     }
 }
