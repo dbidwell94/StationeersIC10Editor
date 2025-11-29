@@ -2,9 +2,11 @@ namespace StationeersIC10Editor
 {
     using System.Collections.Generic;
     using System.Runtime.CompilerServices;
+
     using Assets.Scripts.Objects.Motherboards;
     using Assets.Scripts.UI;
     using Assets.Scripts.UI.ImGuiUi;
+
     using HarmonyLib;
 
     [HarmonyPatch]

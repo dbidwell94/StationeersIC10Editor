@@ -3,15 +3,21 @@ namespace StationeersIC10Editor
     using System;
     using System.Collections.Generic;
     using System.Linq;
+
     using Assets.Scripts;
     using Assets.Scripts.Networking;
     using Assets.Scripts.Networking.Transports;
     using Assets.Scripts.Objects.Motherboards;
     using Assets.Scripts.UI;
+
     using BepInEx.Configuration;
+
     using Cysharp.Threading.Tasks;
+
     using ImGuiNET;
+
     using UnityEngine;
+
     using static Settings;
     using static Utils;
 
@@ -1419,14 +1425,14 @@ namespace StationeersIC10Editor
         public void DrawFooter()
         {
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
-            ImGui.Text($"{CaretLine, 3}/{CaretCol, 2},");
+            ImGui.Text($"{CaretLine,3}/{CaretCol,2},");
             ImGui.SameLine();
 
             var pos = ImGui.GetCursorScreenPos();
             var code = Code;
 
-            var sLines = $"{Lines.Count, 3}";
-            var sBytes = $"{code.Length + Lines.Count - 1, 4}";
+            var sLines = $"{Lines.Count,3}";
+            var sBytes = $"{code.Length + Lines.Count - 1,4}";
 
             uint lineColor = _colorDefault;
             if (EnforceLineLimit)

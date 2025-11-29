@@ -2,8 +2,11 @@ namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
+
 using ImGuiNET;
+
 using UnityEngine;
+
 using static Settings;
 
 public static class CodeFormatters

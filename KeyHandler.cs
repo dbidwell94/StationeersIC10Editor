@@ -1,10 +1,13 @@
 namespace StationeersIC10Editor
 {
     using System;
-    using ImGuiNET;
+
     using Assets.Scripts;
     using Assets.Scripts.Objects;
     using Assets.Scripts.UI;
+
+    using ImGuiNET;
+
     using UnityEngine;
 
     using static Settings;

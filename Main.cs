@@ -1,8 +1,10 @@
 namespace StationeersIC10Editor
 {
     using System;
+
     using BepInEx;
     using BepInEx.Configuration;
+
     using HarmonyLib;
 
     class L
