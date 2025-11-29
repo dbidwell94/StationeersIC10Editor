@@ -2,12 +2,10 @@ namespace StationeersIC10Editor
 {
     using System.Collections.Generic;
     using System.Runtime.CompilerServices;
-    using Assets.Scripts.Objects.Electrical;
+    using Assets.Scripts.Objects.Motherboards;
     using Assets.Scripts.UI;
     using Assets.Scripts.UI.ImGuiUi;
-    using Assets.Scripts.Objects.Motherboards;
     using HarmonyLib;
-    using DLC;
 
     [HarmonyPatch]
     public static class IC10EditorPatches
@@ -40,14 +38,12 @@ namespace StationeersIC10Editor
             return editor;
         }
 
-        [HarmonyPatch(
-                typeof(InputSourceCode),
-                nameof(InputSourceCode.ShowInputPanel))]
+        [HarmonyPatch(typeof(InputSourceCode), nameof(InputSourceCode.ShowInputPanel))]
         [HarmonyPrefix]
         public static void InputSourceCode_ShowInputPanel_Prefix(
             string title,
             ref string defaultText
-            )
+        )
         {
             EditorWindow.UseNativeEditor = false;
             var editor = GetEditor(InputSourceCode.Instance.PCM);
@@ -72,20 +68,23 @@ namespace StationeersIC10Editor
                 L.Error("Exception in Editor Draw:");
                 L.Error(e.ToString());
             }
-
         }
 
         [HarmonyPatch(typeof(EditorLineOfCode))]
         [HarmonyPatch(nameof(EditorLineOfCode.HandleUpdate))]
         [HarmonyPrefix]
         static bool EditorLineOfCode_HandleUpdate_Prefix()
-        { return EditorWindow.UseNativeEditor; }
+        {
+            return EditorWindow.UseNativeEditor;
+        }
 
         [HarmonyPatch(typeof(InputSourceCode))]
         [HarmonyPatch(nameof(InputSourceCode.HandleInput))]
         [HarmonyPrefix]
         static bool InputSourceCode_HandleInput_Prefix()
-        { return EditorWindow.UseNativeEditor; }
+        {
+            return EditorWindow.UseNativeEditor;
+        }
 
         [HarmonyPatch(typeof(InputSourceCode))]
         [HarmonyPatch(nameof(InputSourceCode.Copy))]
@@ -113,7 +112,6 @@ namespace StationeersIC10Editor
                 GetEditor(InputSourceCode.Instance.PCM).MotherboardTab.ResetCode(value);
 
             return false;
-
         }
     }
 }
