@@ -33,7 +33,6 @@ namespace StationeersIC10Editor
         {
             _logger?.LogWarning(message);
         }
-
     }
 
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
@@ -55,14 +54,54 @@ namespace StationeersIC10Editor
 
         private void BindAllConfigs()
         {
-            VimBindings = Config.Bind("General", "Enable VIM bindings (experimental!)", false, "Enable VIM bindings");
-            EnforceLineLimit = Config.Bind("General", "Enforce 128 line limit", true, "Enforce the 128 line limit of IC10 programs");
-            EnforceByteLimit = Config.Bind("General", "Enforce 4KB size limit", true, "Enforce the 4KB byte size of IC10 programs");
-            PauseOnOpen = Config.Bind("General", "Pause game when IC10 editor is open", true, "Pause the game when the IC10 editor window is open");
-            ScaleFactor = Config.Bind("General", "UI Scale Factor", 1.0f, "Scale factor for the IC10 editor UI");
-            LineSpacingOffset = Config.Bind("General", "Line Spacing Offset", 0, "Integer to increase/decrease line spacing");
-            TooltipDelay = Config.Bind("General", "Tooltip Delay", 100f, "Delay in seconds before tooltips are shown");
-            EnableAutoComplete = Config.Bind("General", "Autocompletion", true, "Enable autocompletion/suggestions (trigger with Tab key)");
+            VimBindings = Config.Bind(
+                "General",
+                "Enable VIM bindings (experimental!)",
+                false,
+                "Enable VIM bindings"
+            );
+            EnforceLineLimit = Config.Bind(
+                "General",
+                "Enforce 128 line limit",
+                true,
+                "Enforce the 128 line limit of IC10 programs"
+            );
+            EnforceByteLimit = Config.Bind(
+                "General",
+                "Enforce 4KB size limit",
+                true,
+                "Enforce the 4KB byte size of IC10 programs"
+            );
+            PauseOnOpen = Config.Bind(
+                "General",
+                "Pause game when IC10 editor is open",
+                true,
+                "Pause the game when the IC10 editor window is open"
+            );
+            ScaleFactor = Config.Bind(
+                "General",
+                "UI Scale Factor",
+                1.0f,
+                "Scale factor for the IC10 editor UI"
+            );
+            LineSpacingOffset = Config.Bind(
+                "General",
+                "Line Spacing Offset",
+                0,
+                "Integer to increase/decrease line spacing"
+            );
+            TooltipDelay = Config.Bind(
+                "General",
+                "Tooltip Delay",
+                100f,
+                "Delay in seconds before tooltips are shown"
+            );
+            EnableAutoComplete = Config.Bind(
+                "General",
+                "Autocompletion",
+                true,
+                "Enable autocompletion/suggestions (trigger with Tab key)"
+            );
         }
 
         private void Awake()
@@ -71,7 +110,8 @@ namespace StationeersIC10Editor
             {
                 L.SetLogger(this.Logger);
                 this.Logger.LogInfo(
-                    $"Awake ${PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}");
+                    $"Awake ${PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}"
+                );
                 BindAllConfigs();
 
                 _harmony = new Harmony(PluginGuid);
@@ -79,11 +119,12 @@ namespace StationeersIC10Editor
 
                 CodeFormatters.RegisterFormatter("Plain", () => new PlainTextFormatter());
                 CodeFormatters.RegisterFormatter("IC10", () => new IC10.IC10CodeFormatter());
-
             }
             catch (Exception ex)
             {
-                this.Logger.LogError($"Error during ${PluginName} {VersionInfo.VersionGit} init: {ex}");
+                this.Logger.LogError(
+                    $"Error during ${PluginName} {VersionInfo.VersionGit} init: {ex}"
+                );
             }
         }
 

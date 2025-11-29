@@ -1,14 +1,5 @@
 namespace StationeersIC10Editor
 {
-    using System;
-    using System.Collections.Generic;
-    using Assets.Scripts;
-    using Assets.Scripts.Objects.Electrical;
-    using Assets.Scripts.Objects.Motherboards;
-    using Assets.Scripts.UI;
-    using ImGuiNET;
-    using UnityEngine;
-
     public struct TextRange
     {
         public TextPosition Start;
@@ -124,6 +115,29 @@ namespace StationeersIC10Editor
         public override string ToString()
         {
             return $"({Line}, {Col})";
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj.GetType() != this.GetType())
+            {
+                return false;
+            }
+
+            var other = (TextPosition)obj;
+
+            return (other.Col == this.Col && other.Line == this.Line);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 397 + Line;
+                hash = hash * 397 + Col;
+                return hash;
+            }
         }
     }
 }
