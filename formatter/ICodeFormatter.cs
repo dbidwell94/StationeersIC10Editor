@@ -1,20 +1,24 @@
 namespace StationeersIC10Editor
 {
-    using ImGuiNET;
     using System;
     using System.Collections.Generic;
+    using ImGuiNET;
     using UnityEngine;
-
     using static Settings;
 
     public static class CodeFormatters
     {
-        private static Dictionary<string, Func<ICodeFormatter>> formatters = new Dictionary<string, Func<ICodeFormatter>>();
+        private static Dictionary<string, Func<ICodeFormatter>> formatters =
+            new Dictionary<string, Func<ICodeFormatter>>();
         private static string defaultFormatterName = "Plain";
 
         public static List<string> FormatterNames => new List<string>(formatters.Keys);
 
-        public static void RegisterFormatter(string name, Func<ICodeFormatter> formatter, bool isDefault = false)
+        public static void RegisterFormatter(
+            string name,
+            Func<ICodeFormatter> formatter,
+            bool isDefault = false
+        )
         {
             L.Info($"Registering code formatter: {name}");
             if (!formatters.ContainsKey(name))
@@ -36,36 +40,20 @@ namespace StationeersIC10Editor
         }
     }
 
-    public class Token
-    {
-        public string Text;
-        public int Column;
-        public uint Color;
-        public uint Background;
-        public string Tooltip;
-        public string Error;
-        public string Status;
-
-        public Token(string text, int column, uint color = 0xFFFFFFFF, uint background = 0, string tooltip = null, string error = null)
-        {
-            Text = text;
-            Column = column;
-            Color = color;
-            Background = background;
-            Tooltip = tooltip;
-            Error = error;
-        }
-    }
-
     public class Line : List<Token>
     {
-        public int Length => (int)(this.Count == 0 ? 0 : this[this.Count - 1].Column + (uint)this[this.Count - 1].Text.Length);
+        public int Length =>
+            (int)(
+                this.Count == 0
+                    ? 0
+                    : this[this.Count - 1].Column + (uint)this[this.Count - 1].Text.Length
+            );
 
         public Line()
-          : base()
-        { }
+            : base() { }
+
         public Line(string text, uint color = 0xFFFFFFFF)
-          : base()
+            : base()
         {
             // By default, create a single token with the entire line
             Add(new Token(text, 0, color));
@@ -121,6 +109,7 @@ namespace StationeersIC10Editor
         public void Draw(Vector2 pos)
         {
             var drawList = ImGui.GetWindowDrawList();
+
             float x0 = pos.x;
             foreach (var token in this)
             {
@@ -128,7 +117,6 @@ namespace StationeersIC10Editor
                 drawList.AddText(pos, token.Color, token.Text);
             }
         }
-
     }
 
     public class FormattedText : List<Line>
@@ -149,10 +137,7 @@ namespace StationeersIC10Editor
 
         public string RawText
         {
-            get
-            {
-                return string.Join("\n", this.ConvertAll(line => line.Text));
-            }
+            get { return string.Join("\n", this.ConvertAll(line => line.Text)); }
         }
 
         public Token GetTokenAtPosition(TextPosition pos)
@@ -209,7 +194,7 @@ namespace StationeersIC10Editor
         public FormattedText Tooltip => _tooltip;
 
         // this will be triggered by the editor after a (batch of) changes
-        public Action OnCodeChanged = () => {};
+        public Action OnCodeChanged = () => { };
 
         public abstract Line ParseLine(string line);
 
@@ -280,28 +265,28 @@ namespace StationeersIC10Editor
             return ((uint)a << 24) | ((uint)b << 16) | ((uint)g << 8) | r;
         }
 
-        virtual public void ReplaceLine(int index, string newLine)
+        public virtual void ReplaceLine(int index, string newLine)
         {
             RemoveLine(index);
             InsertLine(index, newLine);
         }
 
-        virtual public void AppendLine(string line)
+        public virtual void AppendLine(string line)
         {
             Lines.Add(ParseLine(line));
         }
 
-        virtual public void InsertLine(int index, string line)
+        public virtual void InsertLine(int index, string line)
         {
             Lines.Insert(index, ParseLine(line));
         }
 
-        virtual public void RemoveLine(int index)
+        public virtual void RemoveLine(int index)
         {
             Lines.RemoveAt(index);
         }
 
-        virtual public void ResetCode(string code)
+        public virtual void ResetCode(string code)
         {
             var lines = code.Split('\n');
             Lines.Clear();
@@ -310,7 +295,7 @@ namespace StationeersIC10Editor
             OnCodeChanged();
         }
 
-        virtual public void DrawLine(int lineIndex, TextRange selection, bool drawLineNumber = true)
+        public virtual void DrawLine(int lineIndex, TextRange selection, bool drawLineNumber = true)
         {
             Vector2 pos = ImGui.GetCursorScreenPos();
 
@@ -318,7 +303,11 @@ namespace StationeersIC10Editor
 
             if (drawLineNumber)
             {
-                drawList.AddText(pos, ICodeFormatter.ColorLineNumber, lineIndex.ToString().PadLeft(3) + ".");
+                drawList.AddText(
+                    pos,
+                    ICodeFormatter.ColorLineNumber,
+                    lineIndex.ToString().PadLeft(3) + "."
+                );
                 pos.x += ICodeFormatter.LineNumberOffset * CharWidth;
             }
             int selectionMin = -1,
@@ -332,9 +321,12 @@ namespace StationeersIC10Editor
                     var tokenPos = new Vector2(pos.x + CharWidth * token.Column, pos.y);
                     drawList.AddRectFilled(
                         tokenPos,
-                        new Vector2(tokenPos.x + CharWidth * token.Text.Length,
-                                    tokenPos.y + LineHeight),
-                        token.Background);
+                        new Vector2(
+                            tokenPos.x + CharWidth * token.Text.Length,
+                            tokenPos.y + LineHeight
+                        ),
+                        token.Background
+                    );
                 }
 
             if (selection)
@@ -352,7 +344,8 @@ namespace StationeersIC10Editor
                     Vector2 selStart = new Vector2(pos.x + (CharWidth * selectionMin), pos.y);
                     Vector2 selEnd = new Vector2(
                         pos.x + (CharWidth * selectionMax),
-                        pos.y + lineHeight);
+                        pos.y + lineHeight
+                    );
 
                     drawList.AddRectFilled(selStart, selEnd, ICodeFormatter.ColorSelection);
                 }
@@ -371,7 +364,6 @@ namespace StationeersIC10Editor
         {
             return RawText;
         }
-
 
         public virtual void UpdateTooltip(TextPosition mouseTextPos)
         {
@@ -424,7 +416,11 @@ namespace StationeersIC10Editor
             _autocomplete = null;
         }
 
-        public virtual void Update(TextPosition caretPos, Vector2 mousePos, TextPosition mouseTextPos)
+        public virtual void Update(
+            TextPosition caretPos,
+            Vector2 mousePos,
+            TextPosition mouseTextPos
+        )
         {
             if ((bool)caretPos && !caretPos.Equals(_lastCaretPos))
             {
@@ -450,7 +446,9 @@ namespace StationeersIC10Editor
             if (Tooltip == null || Tooltip.Count == 0)
                 return;
 
-            ImGui.SetNextWindowSize(new Vector2(Tooltip.Width, Tooltip.Height) + 2 * ImGui.GetStyle().WindowPadding);
+            ImGui.SetNextWindowSize(
+                new Vector2(Tooltip.Width, Tooltip.Height) + 2 * ImGui.GetStyle().WindowPadding
+            );
             ImGui.BeginTooltip();
             Tooltip.Draw(ImGui.GetCursorScreenPos());
             ImGui.EndTooltip();
