@@ -53,6 +53,14 @@ public class Line
         return null;
     }
 
+    public string GetTokenText(int index)
+    {
+        var token = Tokens[index];
+        if (token.Column + token.Length <= _content.Length)
+            return _content.Substring(token.Column, token.Length);
+        return string.Empty;
+    }
+
     public void Draw(Vector2 pos, int lineIndex)
     {
         var drawList = ImGui.GetWindowDrawList();
@@ -299,7 +307,7 @@ public abstract class ICodeFormatter
         var lines = code.Split('\n');
         Lines.Clear();
         foreach (var line in lines)
-            Lines.Add(ParseLine(line));
+            AppendLine(line);
         OnCodeChanged();
     }
 
@@ -409,6 +417,26 @@ public abstract class ICodeFormatter
 
     public virtual void PerformAutocomplete()
     {
+        if (_autocomplete == null || _autocomplete.Count == 0)
+            return;
+
+        if (_autocomplete.Count > 1)
+            return; // Only auto-insert if there's a single option
+
+        var suggestionLine = _autocomplete[0];
+        if (suggestionLine.Length == 0)
+            return;
+        var suggestion = suggestionLine.Text;
+        var line = CurrentLine;
+        if (line == null)
+            return;
+
+        var col = _lastCaretPos.Col;
+        while (col > 0 && !char.IsWhiteSpace(line.Text[col - 1]))
+            col--;
+
+        var newLines = line.Text.Substring(0, col) + suggestion + line.Text.Substring(_lastCaretPos.Col);
+        Editor.ReplaceLine(_lastCaretPos.Line, newLines);
     }
 
     public virtual void Update(TextPosition caretPos, Vector2 mousePos, TextPosition mouseTextPos)

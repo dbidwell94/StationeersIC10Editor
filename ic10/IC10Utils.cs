@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 using Assets.Scripts;
 using Assets.Scripts.Atmospherics;
@@ -432,89 +433,86 @@ public class IC10OpCode
         Description = description;
         float w = 0.0f;
         float wmax = 0.0f;
-        // Parse colored text for display
-        FormattedText TooltipHeader = IC10CodeFormatter.ParseColoredText(
-            $"Instruction: <color=yellow>{name}</color>",
-            ref wmax
-        );
-        Line TooltipExample = IC10CodeFormatter.ParseColoredText($"    {example}", ref w)[0];
+        FormattedText TooltipHeader = ParseColoredText($"Instruction: <color=yellow>{name}</color>", ref wmax);
+        Line TooltipExample = ParseColoredText($"    {example}", ref w)[0];
         wmax = Math.Max(wmax, w);
 
-        // Parse arguments from the plain text of the example string
-        // Example usually looks like "move r? num" or "alias str d?"
-        string plainExample = TooltipExample.Text.Trim();
+        L.Debug($"Parsing opcode {name} example: {example}");
 
-        // Skip the first part (the command itself)
-        int firstSpace = plainExample.IndexOf(' ');
-        if (firstSpace >= 0)
+        for (var j = 0; j < TooltipExample.Tokens.Count; j++)
         {
-            string argsStr = plainExample.Substring(firstSpace).Trim();
+            var t = TooltipExample.Tokens[j];
+            L.Debug($"  Token {j}: col={t.Column} '{TooltipExample.Text.Substring(t.Column, t.Length)}'");
+        }
 
-            // The argument format might use | for alternatives, e.g., "r?|num"
-            // We split by spaces to get argument chunks first
-            string[] argChunks = argsStr.Split(
-                new char[] { ' ', '\t' },
-                StringSplitOptions.RemoveEmptyEntries
-            );
-
-            foreach (string s in argChunks)
+        int i = 1;
+        while (i < TooltipExample.Tokens.Count)
+        {
+            var s = TooltipExample.GetTokenText(i);
+            L.Debug($"  Token {i}: '{s}'");
+            if (s.Contains("(") || s.Contains(")"))
             {
-                if (string.IsNullOrWhiteSpace(s) || s == "(" || s == ")")
-                    continue;
-
-                // Handle cases where the game might output args strangely
-                if (s == "|")
-                    continue; // Should be handled within the arg string usually
-
-                ArgType argType = new ArgType();
-
-                foreach (
-                    var token in s.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries)
-                )
-                {
-                    var trimmed = token.Trim().TrimEnd(',', ')');
-                    switch (trimmed)
-                    {
-                        case "r?":
-                            argType.Add(DataType.Register);
-                            if (ArgumentTypes.Count > 0)
-                                argType.Add(DataType.Number);
-                            break;
-                        case "d?":
-                            argType.Add(DataType.Device);
-                            break;
-                        case "id":
-                            argType.Add(DataType.DeviceId);
-                            break;
-                        case "num":
-                        case "int":
-                        case "deviceHash":
-                        case "nameHash":
-                        case "slotIndex":
-                            argType.Add(DataType.Number, DataType.Register);
-                            break;
-                        case "logicType":
-                            argType.Add(DataType.LogicType);
-                            break;
-                        case "logicSlotType":
-                            argType.Add(DataType.LogicSlotType);
-                            break;
-                        case "batchMode":
-                            argType.Add(DataType.BatchMode);
-                            break;
-                        case "reagentMode":
-                            argType.Add(DataType.ReagentMode);
-                            break;
-                        case "str":
-                            argType.Add(DataType.Identifier, DataType.Label, DataType.Device);
-                            break;
-                        default:
-                            // L.Warning($"Unknown argument token '{trimmed}' in opcode {name}");
-                            break;
-                    }
-                }
-                ArgumentTypes.Add(argType);
+                i++;
+                continue;
             }
+
+            while (i + 2 < TooltipExample.Tokens.Count && TooltipExample.GetTokenText(i + 1).Trim() == "|")
+            {
+                s += TooltipExample.GetTokenText(i + 1);
+                s += TooltipExample.GetTokenText(i + 2);
+                i += 2;
+            }
+
+            i++;
+
+            ArgType argType = new ArgType();
+
+            foreach (var token in s.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var trimmed = token.Trim().TrimEnd(',', ')');
+                L.Debug($"    Arg token: '{trimmed}'");
+                switch (trimmed)
+                {
+                    case "r?":
+                        argType.Add(DataType.Register);
+                        if (ArgumentTypes.Count > 0)
+                            argType.Add(DataType.Number);
+                        break;
+                    case "d?":
+                        argType.Add(DataType.Device);
+                        break;
+                    case "id":
+                        argType.Add(DataType.DeviceId);
+                        break;
+                    case "num":
+                    case "int":
+                    case "deviceHash":
+                    case "nameHash":
+                    case "slotIndex":
+                        argType.Add(DataType.Number, DataType.Register);
+                        break;
+                    case "logicType":
+                        argType.Add(DataType.LogicType);
+                        break;
+                    case "logicSlotType":
+                        argType.Add(DataType.LogicSlotType);
+                        break;
+                    case "batchMode":
+                        argType.Add(DataType.BatchMode);
+                        break;
+                    case "reagentMode":
+                        argType.Add(DataType.ReagentMode);
+                        break;
+                    case "str":
+                        argType.Add(DataType.Identifier, DataType.Label, DataType.Device);
+                        break;
+                    default:
+                        L.Warning($"Unknown argument token '{trimmed}' in opcode {name}");
+                        break;
+                }
+            }
+
+            ArgumentTypes.Add(argType);
         }
 
         Tooltip = new FormattedText();
@@ -522,30 +520,18 @@ public class IC10OpCode
         Tooltip.Add(new Line(""));
         Tooltip.Add(TooltipExample);
         Tooltip.Add(new Line(""));
-        var descriptionLine = new Line(""); // Correct constructor
+        var descriptionLine = "";
         int column = 0;
         foreach (var word in Description.Split(' '))
         {
             if (column + word.Length > 70)
             {
-                Tooltip.Add(descriptionLine);
-                descriptionLine = new Line("");
+                Tooltip.Add(new Line(descriptionLine));
+                descriptionLine = "";
                 column = 0;
             }
-            // For description, we just want plain text, so we can use a token if we want coloring,
-            // or just append text to the Line if Line supported append.
-            // Since Line wraps content, we'll just reconstruct the content.
-            // But Line is immutable-ish for text content unless we rebuild it.
-            // Actually, simpler to just treat description as one big token or rebuild the string.
-            // For simplicity, we just create a token for each word but need to manage the text content of the Line.
-            // Current Line implementation requires full text at init.
-            // So we must build the string first.
-        }
-        // Simpler description handling:
-        var descLines = WrapText(Description, 70);
-        foreach (var dl in descLines)
-        {
-            Tooltip.Add(new Line(dl));
+            descriptionLine += (descriptionLine.Length > 0 ? " " : "") + word;
+            column += word.Length + 1;
         }
     }
 
@@ -568,6 +554,70 @@ public class IC10OpCode
             lines.Add(currentLine);
         return lines;
     }
+
+    public static FormattedText ParseColoredText(string input, ref float width)
+    {
+        var result = new FormattedText();
+        var lines = input.Split('\n');
+        var C = (Func<string, uint>)((string color) => ICodeFormatter.ColorFromHTML(color));
+
+        foreach (var lineStr in lines)
+        {
+            var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
+            int lastIndex = 0;
+
+            // We need to build the "Clean" text for the Line content
+            StringBuilder cleanText = new StringBuilder();
+            // We need to track where semantic tokens map to the clean text
+            List<SemanticToken> tokens = new List<SemanticToken>();
+
+            int currentColumn = 0;
+
+            foreach (Match match in regex.Matches(lineStr))
+            {
+                // Plain text before match
+                if (match.Index > lastIndex)
+                {
+                    string rawText = lineStr.Substring(lastIndex, match.Index - lastIndex);
+                    cleanText.Append(rawText);
+                    // Add a token for plain text with default color
+                    if (!string.IsNullOrWhiteSpace(rawText))
+                        tokens.Add(
+                            new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0)
+                        );
+                    currentColumn += rawText.Length;
+                }
+
+                // Colored text
+                string colorStr = match.Groups[1].Value;
+                string text = match.Groups[2].Value;
+                cleanText.Append(text);
+                if (!string.IsNullOrWhiteSpace(text))
+                    tokens.Add(new SemanticToken(0, currentColumn, text.Length, C(colorStr), 0));
+                currentColumn += text.Length;
+
+                lastIndex = match.Index + match.Length;
+            }
+
+            // Plain text after last match
+            if (lastIndex < lineStr.Length)
+            {
+                string rawText = lineStr.Substring(lastIndex);
+                cleanText.Append(rawText);
+                if (!string.IsNullOrWhiteSpace(rawText))
+                    tokens.Add(new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0));
+            }
+
+            // Create the Line with clean text
+            var resultLine = new Line(cleanText.ToString());
+            foreach (var t in tokens)
+                resultLine.AddToken(t);
+
+            result.Add(resultLine);
+        }
+        return result;
+    }
+
 }
 
 // IC10Line updated to work with SemanticToken logic
@@ -619,21 +669,6 @@ public class IC10Line : Line
             current++;
         }
         return DataType.Unknown;
-    }
-
-    // Get the text of the i-th code token
-    public string GetTokenText(int index)
-    {
-        int current = 0;
-        foreach (var t in Tokens)
-        {
-            if ((DataType)t.Type == DataType.Comment)
-                continue;
-            if (current == index)
-                return Text.Substring(t.Column, t.Length);
-            current++;
-        }
-        return string.Empty;
     }
 
     public static bool IsDeviceChannel(string text)

@@ -908,9 +908,11 @@ namespace StationeersIC10Editor
             code = code.Replace("\r", string.Empty);
             ClearCode(pushUndo);
             var lines = code.Split('\n');
-            if(pushUndo) {
+            if (pushUndo)
+            {
                 var formatter = CodeFormatters.GetFormatterByMatching(code);
-                if(typeof(ICodeFormatter) != CodeFormatter.GetType()) {
+                if (typeof(ICodeFormatter) != CodeFormatter.GetType())
+                {
                     CodeFormatter = formatter;
                     CodeFormatter.Editor = this;
                 }

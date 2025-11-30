@@ -2,8 +2,6 @@ namespace StationeersIC10Editor.IC10;
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Text.RegularExpressions;
 
 public class IC10CodeFormatter : ICodeFormatter
 {
@@ -13,6 +11,22 @@ public class IC10CodeFormatter : ICodeFormatter
     private Dictionary<string, int> devAliases = new Dictionary<string, int>();
     private Dictionary<string, int> labels = new Dictionary<string, int>();
     private HashSet<string> _tokensToUpdate = new HashSet<string>();
+
+    public static double MatchingScore(string input)
+    {
+        // Simple heuristic: count occurrences of IC10-specific keywords
+        int score = 0;
+        var lines = input.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var firstWord = line.TrimStart().Split(' ')[0];
+            if (firstWord.EndsWith(":") || IC10Utils.Instructions.ContainsKey(firstWord))
+                score++;
+        }
+        L.Debug($"IC10CodeFormatter MatchingScore: {score} for input with {lines.Length} lines = {(double)score / lines.Length}");
+        return 1.0 * score / lines.Length;
+    }
 
     public IC10CodeFormatter()
     {
@@ -146,20 +160,21 @@ public class IC10CodeFormatter : ICodeFormatter
             i = end;
         }
 
-        IdentifyTypesAndAddTokens(line, logicTokens, tokenTexts, types);
-
+        IdentifyTypesAndAddTokens(line, logicTokens, tokenTexts);
+        line.UpdateTokenColors(types);
         return line;
     }
 
     public void IdentifyTypesAndAddTokens(
-        Line line,
+        IC10Line line,
         List<SemanticToken> tokens,
-        List<string> texts,
-        Dictionary<string, DataType> globalTypes
+        List<string> texts
     )
     {
         if (tokens.Count == 0)
             return;
+
+        var isInstructionLine = false;
 
         for (int i = 0; i < tokens.Count; i++)
         {
@@ -173,7 +188,7 @@ public class IC10CodeFormatter : ICodeFormatter
                 dt = IC10Utils.Types[txt].ToDataType();
             else if (txt.EndsWith(":"))
                 dt = DataType.Label;
-            else if (globalTypes.TryGetValue(txt, out DataType type))
+            else if (types.TryGetValue(txt, out DataType type))
                 dt = type;
             else if (double.TryParse(txt, out _))
             {
@@ -193,8 +208,7 @@ public class IC10CodeFormatter : ICodeFormatter
             else
                 dt = DataType.Unknown;
 
-            bool isInstructionLine =
-                tokens.Count > 0 && IC10Utils.Instructions.ContainsKey(texts[0]);
+            if (i == 0) isInstructionLine = dt == DataType.Instruction;
 
             if (isInstructionLine)
             {
@@ -246,74 +260,15 @@ public class IC10CodeFormatter : ICodeFormatter
 
             line.AddToken(t);
         }
-    }
 
-    // Fixed ParseColoredText to return FormattedText (Collection of Lines)
-    public static FormattedText ParseColoredText(string input, ref float width)
-    {
-        var result = new FormattedText();
-        var lines = input.Split('\n');
-        var C = (Func<string, uint>)((string color) => ColorFromHTML(color));
-
-        foreach (var lineStr in lines)
-        {
-            var regex = new Regex(@"<color=(.*?)>(.*?)</color>", RegexOptions.Singleline);
-            int lastIndex = 0;
-
-            // We need to build the "Clean" text for the Line content
-            StringBuilder cleanText = new StringBuilder();
-            // We need to track where semantic tokens map to the clean text
-            List<SemanticToken> tokens = new List<SemanticToken>();
-
-            int currentColumn = 0;
-
-            foreach (Match match in regex.Matches(lineStr))
-            {
-                // Plain text before match
-                if (match.Index > lastIndex)
-                {
-                    string rawText = lineStr.Substring(lastIndex, match.Index - lastIndex);
-                    cleanText.Append(rawText);
-                    // Add a token for plain text with default color
-                    tokens.Add(
-                        new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0)
-                    );
-                    currentColumn += rawText.Length;
-                }
-
-                // Colored text
-                string colorStr = match.Groups[1].Value;
-                string text = match.Groups[2].Value;
-                cleanText.Append(text);
-                tokens.Add(new SemanticToken(0, currentColumn, text.Length, C(colorStr), 0));
-                currentColumn += text.Length;
-
-                lastIndex = match.Index + match.Length;
-            }
-
-            // Plain text after last match
-            if (lastIndex < lineStr.Length)
-            {
-                string rawText = lineStr.Substring(lastIndex);
-                cleanText.Append(rawText);
-                tokens.Add(new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0));
-            }
-
-            // Create the Line with clean text
-            var resultLine = new Line(cleanText.ToString());
-            foreach (var t in tokens)
-                resultLine.AddToken(t);
-
-            result.Add(resultLine);
-        }
-        return result;
+        line.UpdateTokenColors(types);
     }
 
     public void UpdateDataType(string newToken, bool defer = true)
     {
         if (newToken != null)
             _tokensToUpdate.Add(newToken);
-        if (defer)
+        if (defer || _tokensToUpdate.Count == 0)
             return;
 
         foreach (var token in _tokensToUpdate)
@@ -352,6 +307,9 @@ public class IC10CodeFormatter : ICodeFormatter
         }
         // In a real implementation, we would re-parse affected lines here
         _tokensToUpdate.Clear();
+
+        foreach (IC10Line line in Lines)
+            line.UpdateTokenColors(types);
     }
 
     public override void ResetCode(string code)
@@ -366,7 +324,13 @@ public class IC10CodeFormatter : ICodeFormatter
     public override void InsertLine(int index, string line)
     {
         base.InsertLine(index, line);
-        TrackAliases(line, true);
+        TrackAliases(Lines[index] as IC10Line, true);
+    }
+
+    public override void AppendLine(string line)
+    {
+        base.AppendLine(line);
+        TrackAliases(Lines[Lines.Count - 1] as IC10Line, true);
     }
 
     public override void RemoveLine(int index)
@@ -374,52 +338,56 @@ public class IC10CodeFormatter : ICodeFormatter
         if (index < 0 || index >= Lines.Count)
             return;
         string lineText = Lines[index].Text;
+        var line = Lines[index] as IC10Line;
         base.RemoveLine(index);
-        TrackAliases(lineText, false);
+        TrackAliases(line, false);
     }
 
-    private void TrackAliases(string line, bool add)
+    private void TrackAliases(IC10Line line, bool add)
     {
-        string[] parts = line.Split(
-            new char[] { ' ', '\t' },
-            StringSplitOptions.RemoveEmptyEntries
-        );
-        if (parts.Length == 0)
+        if (line.NumCodeTokens == 0)
             return;
-        string cmd = parts[0];
-        if (cmd == "alias" && parts.Length >= 3)
-        {
-            string name = parts[1];
-            string target = parts[2];
-            if (target.StartsWith("d"))
-                UpdateDict(devAliases, name, add);
-            else
-                UpdateDict(regAliases, name, add);
-            UpdateDataType(name, false);
-        }
-        else if (cmd == "define" && parts.Length >= 3)
-        {
-            string name = parts[1];
-            UpdateDict(defines, name, add);
-            UpdateDataType(name, false);
-        }
-        else if (cmd.EndsWith(":"))
-        {
-            string label = TrimToken(cmd);
-            UpdateDict(labels, label, add);
-            UpdateDataType(label, false);
-        }
+
+        if (line.IsLabel)
+            UpdateDict(labels, TrimToken(line.GetTokenText(0)), DataType.Label, add);
+        else if (line.IsNumAlias)
+            UpdateDict(regAliases, line.GetTokenText(1), DataType.Number, add);
+        else if (line.IsDevAlias)
+            UpdateDict(devAliases, line.GetTokenText(1), DataType.Device, add);
+        else if (line.IsDefine)
+            UpdateDict(defines, line.GetTokenText(1), DataType.Number, add);
     }
 
-    private void UpdateDict(Dictionary<string, int> dict, string key, bool add)
+    private void UpdateDict(Dictionary<string, int> dict, string key, DataType type, bool add)
     {
-        if (!dict.ContainsKey(key))
-            dict[key] = 0;
+        L.Debug($"UpdateDict: {(add ? "adding" : "removing")} key {key} of type {type}");
         if (add)
+        {
+            if (!dict.ContainsKey(key))
+                dict[key] = 0;
+
             dict[key]++;
+
+            if (!types.ContainsKey(key) || types[key] != type)
+                UpdateDataType(key);
+        }
         else
+        {
+            if (!dict.ContainsKey(key))
+            {
+                L.Warning($"RemoveDictEntry: trying to remove non-existing key {key} from dictionary");
+                return;
+            }
+            L.Debug($"RemoveDictEntry: removing key {key} from dictionary");
             dict[key]--;
-        if (dict[key] <= 0)
-            dict.Remove(key);
+            if (dict[key] == 0)
+            {
+                dict.Remove(key);
+                types.Remove(key);
+            }
+            else if (types.ContainsKey(key) && types[key] != type)
+                UpdateDataType(key);
+
+        }
     }
 }
