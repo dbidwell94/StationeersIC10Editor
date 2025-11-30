@@ -208,47 +208,37 @@ public class IC10CodeFormatter : ICodeFormatter
             else
                 dt = DataType.Unknown;
 
-            if (i == 0) isInstructionLine = dt == DataType.Instruction;
-
-            if (isInstructionLine)
+            if (i == 0)
             {
-                if (i == 0)
-                    dt = DataType.Instruction;
+                isInstructionLine = dt == DataType.Instruction;
+                if (
+                    !isInstructionLine
+                    && dt != DataType.Label
+                    && dt != DataType.Alias
+                    && dt != DataType.Define
+                    && dt != DataType.Comment
+                )
+                    error = $"Unknown instruction '{txt}'";
+            }
 
-                if (i > 0)
+            else if (isInstructionLine)
+            {
+                var opcode = IC10Utils.Instructions[texts[0]];
+                int argIndex = i - 1;
+                if (argIndex < opcode.ArgumentTypes.Count)
                 {
-                    var opcode = IC10Utils.Instructions[texts[0]];
-                    int argIndex = i - 1;
-                    if (argIndex < opcode.ArgumentTypes.Count)
-                    {
-                        var expected = opcode.ArgumentTypes[argIndex];
-                        var actualType = IC10Utils.GetType(txt);
-                        actualType.Add(dt);
+                    var expected = opcode.ArgumentTypes[argIndex];
 
-                        if (!expected.Compat.Has(actualType))
-                        {
-                            error =
-                                $"Invalid argument type {actualType.Description}, expected {expected.Description}";
-                            dt = DataType.Unknown;
-                        }
-                    }
-                    else
+                    if (!expected.Compat.Has(dt))
                     {
-                        error = "Too many arguments";
+                        error =
+                            $"Invalid argument type {dt}, expected {expected.Description}";
+                        dt = DataType.Unknown;
                     }
                 }
-            }
-            else
-            {
-                if (i == 0)
+                else
                 {
-                    if (
-                        dt != DataType.Label
-                        && dt != DataType.Alias
-                        && dt != DataType.Define
-                        && dt != DataType.Comment
-                    )
-                        error = $"Unknown instruction '{txt}'";
+                    error = "Too many arguments";
                 }
             }
 

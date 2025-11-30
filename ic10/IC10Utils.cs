@@ -718,6 +718,8 @@ public class IC10Line : Line
             // Re-resolve type if it was an identifier
             if (types.TryGetValue(text, out DataType newType))
             {
+                if(t.IsError)
+                    t.Data = null;
                 t.Type = (uint)newType;
                 t.Color = IC10CodeFormatter.GetColor(newType, text);
                 t.Background = IC10CodeFormatter.GetBackgroundColor(newType, text);
