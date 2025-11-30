@@ -811,14 +811,7 @@ namespace StationeersIC10Editor
             {
                 char c = (char)io.InputQueueCharacters[i];
                 if (c == '\t')
-                {
-                    // todo
-                    // string suggestion = EnableAutoComplete ? Editor.CodeFormatter.GetAutocompleteSuggestion() : null;
-                    // if (suggestion == null)
-                    //     input += "  ";
-                    // else
-                    //     input += suggestion;
-                }
+                    Editor.CodeFormatter.PerformAutocomplete();
                 else
                     input += c;
             }

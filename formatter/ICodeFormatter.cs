@@ -192,6 +192,7 @@ public abstract class ICodeFormatter
     protected FormattedText _tooltip = null;
     protected TextPosition _lastCaretPos = new TextPosition(-1, -1);
     protected Vector2 _lastMousePos = new Vector2(-1, -1);
+    public IEditor Editor;
 
     public Vector2 MousePos => _lastMousePos;
     public TextPosition CaretPos => _lastCaretPos;
@@ -404,6 +405,10 @@ public abstract class ICodeFormatter
     public virtual void UpdateAutocomplete()
     {
         _autocomplete = null;
+    }
+
+    public virtual void PerformAutocomplete()
+    {
     }
 
     public virtual void Update(TextPosition caretPos, Vector2 mousePos, TextPosition mouseTextPos)

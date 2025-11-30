@@ -220,6 +220,7 @@ namespace StationeersIC10Editor
             Target = target;
             KeyHandler = keyHandler;
             CodeFormatter = CodeFormatters.GetFormatter();
+            CodeFormatter.Editor = this;
             UndoList = new LinkedList<EditorState>();
             RedoList = new LinkedList<EditorState>();
             CodeFormatter.ResetCode("");
@@ -284,8 +285,9 @@ namespace StationeersIC10Editor
             }
             set
             {
-                CodeFormatter.Lines = value.FormattedText;
+                // CodeFormatter.Lines = value.FormattedText;
                 CaretPos = value.CaretPos;
+                CodeFormatter.ResetCode(value.Code);
                 _isCodeChanged = true;
             }
         }
@@ -307,6 +309,7 @@ namespace StationeersIC10Editor
                 if (state.Code == first.Code)
                 {
                     first.CaretPos = state.CaretPos;
+                    first.FormattedText = state.FormattedText;
                     return;
                 }
 
@@ -905,6 +908,13 @@ namespace StationeersIC10Editor
             code = code.Replace("\r", string.Empty);
             ClearCode(pushUndo);
             var lines = code.Split('\n');
+            if(pushUndo) {
+                var formatter = CodeFormatters.GetFormatterByMatching(code);
+                if(typeof(ICodeFormatter) != CodeFormatter.GetType()) {
+                    CodeFormatter = formatter;
+                    CodeFormatter.Editor = this;
+                }
+            }
             CodeFormatter.ResetCode(code);
             CaretPos = new TextPosition(0, 0);
             if (pushUndo)
@@ -1380,6 +1390,7 @@ namespace StationeersIC10Editor
                     {
                         var code = ActiveTab.Code;
                         ActiveTab.CodeFormatter = CodeFormatters.GetFormatter(fmt);
+                        ActiveTab.CodeFormatter.Editor = Editor;
                         ActiveTab.CodeFormatter.ResetCode(code);
                     }
                     if (isSelected)
