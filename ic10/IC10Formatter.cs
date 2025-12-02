@@ -28,7 +28,7 @@ public class IC10CodeFormatter : ICodeFormatter
         return 1.0 * score / lines.Length;
     }
 
-    public IC10CodeFormatter()
+    public IC10CodeFormatter() : base()
     {
         OnCodeChanged += () =>
         {
@@ -379,5 +379,113 @@ public class IC10CodeFormatter : ICodeFormatter
                 UpdateDataType(key);
 
         }
+    }
+
+    public override void UpdateAutocomplete()
+    {
+        _autocomplete = null;
+        _autocompleteInsertText = null;
+
+        if (Editor.KeyMode != KeyMode.Insert)
+            return;
+
+        var caret = Editor.CaretPos;
+
+        if(caret.Col == 0)
+            return;
+
+        if (!Editor.IsWordEnd(caret) && caret.Col < Lines[caret.Line].Length)
+            return;
+
+        if (char.IsWhiteSpace(Editor[caret]))
+            caret.Col--;
+
+        var tokenRef = Lines.GetTokenAtPosition(caret);
+        if (tokenRef == null)
+            return;
+
+        var token = tokenRef.Value;
+
+        var line = Lines[caret.Line] as IC10Line;
+        var index = line.Tokens.IndexOf(token);
+        L.Debug($"Current token: '{line.GetTokenText(line.Tokens.IndexOf(token))}'");
+        if (index > 0 && !line.IsInstruction)
+            return;
+
+        IC10.ArgType argType = DataType.Instruction;
+        if(index == 0)
+            argType.Add(DataType.Define, DataType.Alias);
+
+        var text = line.GetTokenText(index);
+
+        if (index > 0)
+        {
+            var opcode = IC10Utils.Instructions[line.GetTokenText(0)];
+            argType = opcode.ArgumentTypes[index - 1].Compat;
+        }
+
+        var suggestionsSet = new HashSet<string>();
+
+        foreach (var entry in IC10Utils.Types)
+            if (!entry.Key.StartsWith("rr") && !entry.Key.StartsWith("dr"))
+                if (argType.Has(entry.Value) && entry.Key.StartsWith(text))
+                    suggestionsSet.Add(entry.Key);
+
+        foreach (var entry in types)
+            if (argType.Has(entry.Value) && entry.Key.StartsWith(text))
+                suggestionsSet.Add(entry.Key);
+
+        var n = suggestionsSet.Count;
+        L.Debug($"Found {n} autocomplete suggestions for token '{text}' of type {argType}");
+        if (n == 0)
+            return;
+
+        var suggestions = new List<string>();
+        foreach (var s in suggestionsSet)
+        {
+            L.Debug($"Adding suggestion: {s}");
+            suggestions.Add(s);
+        }
+
+        if (n == 1 && suggestions[0] == text)
+            return;
+
+        string commonPrefix = null;
+
+        _autocomplete = new FormattedText();
+        for (var iLine = 0; iLine < suggestions.Count; iLine++)
+        {
+            var suggestion = suggestions[iLine];
+            var type = types.ContainsKey(suggestion) ? types[suggestion] : DataType.Unknown;
+            if (type == DataType.Unknown && IC10Utils.Types.ContainsKey(suggestion))
+                type = IC10Utils.Types[suggestion].ToDataType();
+            var tok = new SemanticToken( iLine, 0, suggestion.Length, GetColor(type, suggestion), (uint)type);
+            var l = new Line(suggestion);
+            l.AddToken(tok);
+            _autocomplete.Add(l);
+
+            var rest = suggestion.Substring(text.Length);
+
+            if (commonPrefix == null)
+                commonPrefix = rest;
+            else
+            {
+                if (commonPrefix.Length == 0)
+                    continue;
+
+                int len = Math.Min(commonPrefix.Length, rest.Length);
+                int i = 0;
+                for (; i < len; i++)
+                    if (commonPrefix[i] != rest[i])
+                        break;
+
+                commonPrefix = commonPrefix.Substring(0, i);
+            }
+        }
+
+        if (commonPrefix.Length > 0)
+            _autocompleteInsertText = commonPrefix + " ";
+
+        L.Debug($"Common prefix for autocomplete: |{commonPrefix}|");
     }
 }

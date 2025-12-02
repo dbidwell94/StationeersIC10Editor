@@ -232,6 +232,7 @@ namespace StationeersIC10Editor
             get { return _caretPos; }
             set
             {
+                TextPosition oldPos = new TextPosition(_caretPos.Line, _caretPos.Col);
                 _caretPos = value;
                 if (_caretPos.Line < 0)
                     _caretPos.Line = 0;
@@ -243,6 +244,8 @@ namespace StationeersIC10Editor
                     _caretPos.Col = Lines[_caretPos.Line].Length;
                 ScrollToCaret += 1;
                 _timeLastAction = ImGui.GetTime();
+                if(_caretPos != oldPos)
+                    CodeFormatter.OnCaretMoved();
             }
         }
 
@@ -1642,8 +1645,7 @@ namespace StationeersIC10Editor
             {
                 var completePos = _caretPixelPos + new Vector2(0, 1.5f * LineHeight);
                 ImGui.SetCursorScreenPos(_caretPixelPos);
-
-                // todo CodeFormatter.DrawAutocomplete(ActiveTab, CaretPos, completePos);
+                CodeFormatter.DrawAutocomplete(completePos);
             }
 
             clipper.End();

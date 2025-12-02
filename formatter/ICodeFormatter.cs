@@ -197,6 +197,7 @@ public abstract class ICodeFormatter
 
     protected FormattedText _status = null;
     protected FormattedText _autocomplete = null;
+    protected string _autocompleteInsertText = null;
     protected FormattedText _tooltip = null;
     protected TextPosition _lastCaretPos = new TextPosition(-1, -1);
     protected Vector2 _lastMousePos = new Vector2(-1, -1);
@@ -209,6 +210,7 @@ public abstract class ICodeFormatter
     public FormattedText Tooltip => _tooltip;
 
     public Action OnCodeChanged = () => { };
+    public Action OnCaretMoved = () => { };
 
     public abstract Line ParseLine(string line);
 
@@ -219,6 +221,16 @@ public abstract class ICodeFormatter
             _status = null;
             _autocomplete = null;
             _tooltip = null;
+            UpdateStatus();
+            UpdateAutocomplete();
+        };
+
+        OnCaretMoved += () =>
+        {
+            _status = null;
+            _autocomplete = null;
+            UpdateStatus();
+            UpdateAutocomplete();
         };
     }
 
@@ -417,36 +429,27 @@ public abstract class ICodeFormatter
 
     public virtual void PerformAutocomplete()
     {
-        if (_autocomplete == null || _autocomplete.Count == 0)
+        if (_autocompleteInsertText == null)
             return;
 
-        if (_autocomplete.Count > 1)
-            return; // Only auto-insert if there's a single option
+        var newLine = CurrentLine.Text;
+        newLine = newLine.Insert(
+            _lastCaretPos.Col,
+            _autocompleteInsertText
+        );
 
-        var suggestionLine = _autocomplete[0];
-        if (suggestionLine.Length == 0)
-            return;
-        var suggestion = suggestionLine.Text;
-        var line = CurrentLine;
-        if (line == null)
-            return;
-
-        var col = _lastCaretPos.Col;
-        while (col > 0 && !char.IsWhiteSpace(line.Text[col - 1]))
-            col--;
-
-        var newLines = line.Text.Substring(0, col) + suggestion + line.Text.Substring(_lastCaretPos.Col);
-        Editor.ReplaceLine(_lastCaretPos.Line, newLines);
+        Editor.ReplaceLine(_lastCaretPos.Line, newLine);
+        Editor.CaretPos = new TextPosition(
+            Editor.CaretPos.Line,
+            Editor.CaretPos.Col + _autocompleteInsertText.Length
+        );
     }
 
     public virtual void Update(TextPosition caretPos, Vector2 mousePos, TextPosition mouseTextPos)
     {
-        if ((bool)caretPos && !caretPos.Equals(_lastCaretPos))
-            UpdateStatus();
         if (!mousePos.Equals(_lastMousePos))
         {
             UpdateTooltip(mouseTextPos);
-            UpdateAutocomplete();
         }
         _lastCaretPos = caretPos;
         _lastMousePos = mousePos;
@@ -473,6 +476,21 @@ public abstract class ICodeFormatter
     public virtual void DrawAutocomplete(Vector2 pos)
     {
         if (_autocomplete != null)
-            _autocomplete.Draw(pos);
+        {
+            var completeSize = new Vector2(
+                _autocomplete.Width + 2 * ImGui.GetStyle().WindowPadding.x,
+                _autocomplete.Height + 2 * ImGui.GetStyle().WindowPadding.y
+            );
+
+            float bottomSize = ImGui.GetContentRegionAvail().y - LineHeight - 5.0f + ImGui.GetScrollY();
+            if (bottomSize < completeSize.y)
+            {
+                pos.y -= completeSize.y - bottomSize;
+                pos.x += CharWidth * 2;
+            }
+            var list = ImGui.GetWindowDrawList();
+            list.AddRectFilled(pos, pos + completeSize, ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.9f)), 5.0f);
+            _autocomplete.Draw(pos + ImGui.GetStyle().WindowPadding);
+        }
     }
 }
