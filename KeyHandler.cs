@@ -160,6 +160,8 @@ namespace StationeersIC10Editor
                     break;
                 case "J":
                     pos = ed.Move(pos, new MoveAction(MoveToken.Line, true, Count));
+                    pos.Line = Math.Min(pos.Line, ed.Lines.Count - 1);
+                    pos.Col = ed.Lines[pos.Line].Length;
                     startPos.Col = 0;
                     break;
                 case "k":
@@ -819,7 +821,7 @@ namespace StationeersIC10Editor
             if (input.Length > 0)
             {
                 OnKeyPressed($"{input}");
-                if (!Editor.DeleteSelectedCode() && !VimEnabled)
+                if (!Editor.DeleteSelectedCode())
                     Editor.PushUndoState();
 
                 CurrentLine = CurrentLine.Insert(CaretCol, input);

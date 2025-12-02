@@ -1,6 +1,7 @@
 namespace StationeersIC10Editor
 {
     using System;
+    using System.IO;
     using System.Collections.Generic;
     using System.Linq;
 
@@ -96,7 +97,7 @@ namespace StationeersIC10Editor
     public class EditorState
     {
         public string Code;
-        public FormattedText FormattedText;
+        public StyledText FormattedText;
         public TextPosition CaretPos;
         public double Timestamp;
         public bool Mergeable;
@@ -210,7 +211,7 @@ namespace StationeersIC10Editor
         public LinkedList<EditorState> RedoList;
         public ICodeFormatter CodeFormatter;
         public string Code => CodeFormatter.RawText;
-        public List<Line> Lines => CodeFormatter.Lines;
+        public List<StyledLine> Lines => CodeFormatter.Lines;
         public string CommandStatus = "";
 
         public ConfirmWindow _confirmWindow = null;
@@ -223,7 +224,8 @@ namespace StationeersIC10Editor
             CodeFormatter.Editor = this;
             UndoList = new LinkedList<EditorState>();
             RedoList = new LinkedList<EditorState>();
-            CodeFormatter.ResetCode("");
+            var code = "";
+            CodeFormatter.ResetCode(code);
             CaretPos = new TextPosition(0, 0);
         }
 
@@ -232,7 +234,6 @@ namespace StationeersIC10Editor
             get { return _caretPos; }
             set
             {
-                TextPosition oldPos = new TextPosition(_caretPos.Line, _caretPos.Col);
                 _caretPos = value;
                 if (_caretPos.Line < 0)
                     _caretPos.Line = 0;
@@ -244,8 +245,6 @@ namespace StationeersIC10Editor
                     _caretPos.Col = Lines[_caretPos.Line].Length;
                 ScrollToCaret += 1;
                 _timeLastAction = ImGui.GetTime();
-                if(_caretPos != oldPos)
-                    CodeFormatter.OnCaretMoved();
             }
         }
 
@@ -319,7 +318,10 @@ namespace StationeersIC10Editor
                 // merge with previous state if within 500ms or same code
                 // merging does not happen accross "large" changes (e.g. paste, cut, delete selection etc.)
                 if (merge && first.Mergeable && state.Timestamp < first.Timestamp + 500)
+                {
+                    L.Info($" Merging undo state, time diff {state.Timestamp - first.Timestamp}");
                     UndoList.RemoveFirst();
+                }
             }
 
             UndoList.AddFirst(state);
@@ -388,6 +390,9 @@ namespace StationeersIC10Editor
         {
             if (pos.Col == 0)
                 return false;
+
+            if (pos.Col >= Lines[pos.Line].Length)
+                return true;
 
             var leftPos = new TextPosition(pos.Line, pos.Col - 1);
 
@@ -978,7 +983,7 @@ namespace StationeersIC10Editor
         public IEditor ActiveTab => Tabs[_activeTabIndex];
         public IEditor MotherboardTab => Tabs[0];
 
-        public List<Line> Lines => ActiveTab.Lines;
+        public List<StyledLine> Lines => ActiveTab.Lines;
         public string Code => ActiveTab.Code;
         public int CaretLine => ActiveTab.CaretLine;
         public int CaretCol => ActiveTab.CaretCol;

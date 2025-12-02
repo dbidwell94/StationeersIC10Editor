@@ -1,7 +1,14 @@
 namespace StationeersIC10Editor.IC10;
 
+// todo: proper tooltips(check column)
+//     update on line called too often(and throws away data if there are no semantic tokens)
+//     -> relevant in tooltips
+
+using Assets.Scripts.Objects;
 using System;
 using System.Collections.Generic;
+using ImGuiNET;
+using UnityEngine;
 
 public class IC10CodeFormatter : ICodeFormatter
 {
@@ -33,6 +40,7 @@ public class IC10CodeFormatter : ICodeFormatter
         OnCodeChanged += () =>
         {
             UpdateDataType(null, defer: false);
+            UpdateRegisterUsage();
         };
     }
 
@@ -118,7 +126,7 @@ public class IC10CodeFormatter : ICodeFormatter
         return startIndex;
     }
 
-    public override Line ParseLine(string text)
+    public override StyledLine ParseLine(string text)
     {
         if (text == null)
             text = string.Empty;
@@ -126,23 +134,9 @@ public class IC10CodeFormatter : ICodeFormatter
 
         string processingText = text;
         int commentIndex = text.IndexOf('#');
-        if (commentIndex >= 0)
-        {
-            processingText = text.Substring(0, commentIndex);
-            line.AddToken(
-                new SemanticToken(
-                    0,
-                    commentIndex,
-                    text.Length - commentIndex,
-                    ColorComment,
-                    (uint)DataType.Comment
-                )
-            );
-        }
-
         int i = 0;
-        List<SemanticToken> logicTokens = new List<SemanticToken>();
-        List<string> tokenTexts = new List<string>();
+        if (commentIndex >= 0)
+            processingText = text.Substring(0, commentIndex);
 
         while (i < processingText.Length)
         {
@@ -153,36 +147,52 @@ public class IC10CodeFormatter : ICodeFormatter
 
             string tokenText = processingText.Substring(start, end - start);
 
-            var st = new SemanticToken(0, start, end - start, 0, (uint)DataType.Unknown);
-            logicTokens.Add(st);
-            tokenTexts.Add(tokenText);
+            var st = new Token(start, tokenText);
+            line.Add(st);
 
             i = end;
         }
 
-        IdentifyTypesAndAddTokens(line, logicTokens, tokenTexts);
+        IdentifyTypesAndAddTokens(line);
         line.UpdateTokenColors(types);
+        if (commentIndex >= 0)
+        {
+            line.Add(
+                new Token(
+                    commentIndex,
+                    text.Substring(commentIndex),
+                    ColorComment,
+                    (uint)DataType.Comment
+                )
+            );
+        }
+
+        L.Info($"Parsed line: {line}");
+        string tokenSummary = "";
+        foreach (var t in line)
+        {
+            tokenSummary += $"|{t.Text}:{(DataType)t.Type}| ";
+        }
+        L.Info($"\tTokens: {tokenSummary}");
+
         return line;
     }
 
-    public void IdentifyTypesAndAddTokens(
-        IC10Line line,
-        List<SemanticToken> tokens,
-        List<string> texts
-    )
+    public void IdentifyTypesAndAddTokens(IC10Line line)
     {
-        if (tokens.Count == 0)
+        if (line.Count == 0)
             return;
 
         var isInstructionLine = false;
 
-        for (int i = 0; i < tokens.Count; i++)
+        for (int i = 0; i < line.NumCodeTokens; i++)
         {
-            var t = tokens[i];
-            string txt = texts[i];
+            var t = line[i];
+            t.Tooltip = null;
+            t.Error = null;
+            string txt = t.Text;
             DataType dt = DataType.Unknown;
             string error = null;
-            string tooltip = null;
 
             if (IC10Utils.IsBuiltin(txt))
                 dt = IC10Utils.Types[txt].ToDataType();
@@ -193,7 +203,18 @@ public class IC10CodeFormatter : ICodeFormatter
             else if (double.TryParse(txt, out _))
             {
                 dt = DataType.Number;
-                if (int.TryParse(txt, out int hash)) { }
+                if (int.TryParse(txt, out int hash))
+                {
+                    var thing = Prefab.Find<Thing>(hash);
+                    if (thing != null)
+                    {
+                        var tooltip = new StyledText();
+                        var ttLine = new StyledLine(thing.PrefabName);
+                        ttLine.Add(new Token(0, thing.PrefabName, ColorFromHTML("#00ff00")));
+                        tooltip.Add(ttLine);
+                        t.Tooltip = tooltip;
+                    }
+                }
             }
             else if (txt.StartsWith("$"))
                 dt = DataType.Number;
@@ -206,7 +227,13 @@ public class IC10CodeFormatter : ICodeFormatter
             else if (IC10Line.IsDeviceChannel(txt))
                 dt = DataType.Device;
             else
+            {
                 dt = DataType.Unknown;
+                error = "Unknown identifier";
+            }
+
+            if (dt == DataType.Instruction)
+                t.Tooltip = IC10Utils.Instructions[txt].Tooltip;
 
             if (i == 0)
             {
@@ -223,7 +250,7 @@ public class IC10CodeFormatter : ICodeFormatter
 
             else if (isInstructionLine)
             {
-                var opcode = IC10Utils.Instructions[texts[0]];
+                var opcode = IC10Utils.Instructions[line[0].Text];
                 int argIndex = i - 1;
                 if (argIndex < opcode.ArgumentTypes.Count)
                 {
@@ -243,12 +270,12 @@ public class IC10CodeFormatter : ICodeFormatter
             }
 
             t.Type = (uint)dt;
-            t.Color = error != null ? ColorError : GetColor(dt, txt);
-            t.Background = GetBackgroundColor(dt, txt);
-            t.Data = error ?? tooltip;
-            t.IsError = error != null;
+            t.Style = new Style(error != null ? ColorError : GetColor(dt, txt),
+             GetBackgroundColor(dt, txt));
+            if (error != null)
+                t.Error = StyledText.ErrorText(error);
 
-            line.AddToken(t);
+            // line.Add(t);
         }
 
         line.UpdateTokenColors(types);
@@ -257,7 +284,10 @@ public class IC10CodeFormatter : ICodeFormatter
     public void UpdateDataType(string newToken, bool defer = true)
     {
         if (newToken != null)
+        {
+            L.Info($"UpdateDataType: scheduling update for token {newToken}, defer={defer}");
             _tokensToUpdate.Add(newToken);
+        }
         if (defer || _tokensToUpdate.Count == 0)
             return;
 
@@ -295,11 +325,12 @@ public class IC10CodeFormatter : ICodeFormatter
                 type = DataType.Unknown;
             types[token] = type;
         }
-        // In a real implementation, we would re-parse affected lines here
-        _tokensToUpdate.Clear();
 
+        // In an efficient implementation, we would re-parse only affected lines here
         foreach (IC10Line line in Lines)
-            line.UpdateTokenColors(types);
+            line.UpdateTokenColors(types, _tokensToUpdate);
+
+        _tokensToUpdate.Clear();
     }
 
     public override void ResetCode(string code)
@@ -339,13 +370,13 @@ public class IC10CodeFormatter : ICodeFormatter
             return;
 
         if (line.IsLabel)
-            UpdateDict(labels, TrimToken(line.GetTokenText(0)), DataType.Label, add);
+            UpdateDict(labels, TrimToken(line[0].Text), DataType.Label, add);
         else if (line.IsNumAlias)
-            UpdateDict(regAliases, line.GetTokenText(1), DataType.Number, add);
+            UpdateDict(regAliases, line[1].Text, DataType.Number, add);
         else if (line.IsDevAlias)
-            UpdateDict(devAliases, line.GetTokenText(1), DataType.Device, add);
+            UpdateDict(devAliases, line[1].Text, DataType.Device, add);
         else if (line.IsDefine)
-            UpdateDict(defines, line.GetTokenText(1), DataType.Number, add);
+            UpdateDict(defines, line[1].Text, DataType.Number, add);
     }
 
     private void UpdateDict(Dictionary<string, int> dict, string key, DataType type, bool add)
@@ -368,12 +399,13 @@ public class IC10CodeFormatter : ICodeFormatter
                 L.Warning($"RemoveDictEntry: trying to remove non-existing key {key} from dictionary");
                 return;
             }
-            L.Debug($"RemoveDictEntry: removing key {key} from dictionary");
+            L.Debug($"RemoveDictEntry: removing key {key} from dictionary {dict[key]}");
             dict[key]--;
             if (dict[key] == 0)
             {
                 dict.Remove(key);
                 types.Remove(key);
+                UpdateDataType(key);
             }
             else if (types.ContainsKey(key) && types[key] != type)
                 UpdateDataType(key);
@@ -391,7 +423,7 @@ public class IC10CodeFormatter : ICodeFormatter
 
         var caret = Editor.CaretPos;
 
-        if(caret.Col == 0)
+        if (caret.Col == 0)
             return;
 
         if (!Editor.IsWordEnd(caret) && caret.Col < Lines[caret.Line].Length)
@@ -400,27 +432,26 @@ public class IC10CodeFormatter : ICodeFormatter
         if (char.IsWhiteSpace(Editor[caret]))
             caret.Col--;
 
-        var tokenRef = Lines.GetTokenAtPosition(caret);
-        if (tokenRef == null)
+        var token = Lines.GetTokenAtPosition(caret);
+        if (token == null)
             return;
 
-        var token = tokenRef.Value;
-
         var line = Lines[caret.Line] as IC10Line;
-        var index = line.Tokens.IndexOf(token);
-        L.Debug($"Current token: '{line.GetTokenText(line.Tokens.IndexOf(token))}'");
+        var index = line.IndexOf(token);
         if (index > 0 && !line.IsInstruction)
             return;
 
         IC10.ArgType argType = DataType.Instruction;
-        if(index == 0)
+        if (index == 0)
             argType.Add(DataType.Define, DataType.Alias);
 
-        var text = line.GetTokenText(index);
+        var text = line[index].Text;
 
         if (index > 0)
         {
-            var opcode = IC10Utils.Instructions[line.GetTokenText(0)];
+            var opcode = IC10Utils.Instructions[line[0].Text];
+            if (index - 1 >= opcode.ArgumentTypes.Count)
+                return;
             argType = opcode.ArgumentTypes[index - 1].Compat;
         }
 
@@ -452,16 +483,16 @@ public class IC10CodeFormatter : ICodeFormatter
 
         string commonPrefix = null;
 
-        _autocomplete = new FormattedText();
+        _autocomplete = new StyledText();
         for (var iLine = 0; iLine < suggestions.Count; iLine++)
         {
             var suggestion = suggestions[iLine];
             var type = types.ContainsKey(suggestion) ? types[suggestion] : DataType.Unknown;
             if (type == DataType.Unknown && IC10Utils.Types.ContainsKey(suggestion))
                 type = IC10Utils.Types[suggestion].ToDataType();
-            var tok = new SemanticToken( iLine, 0, suggestion.Length, GetColor(type, suggestion), (uint)type);
-            var l = new Line(suggestion);
-            l.AddToken(tok);
+            var tok = new Token(0, suggestion, GetColor(type, suggestion), (uint)type);
+            var l = new StyledLine(suggestion);
+            l.Add(tok);
             _autocomplete.Add(l);
 
             var rest = suggestion.Substring(text.Length);
@@ -483,9 +514,72 @@ public class IC10CodeFormatter : ICodeFormatter
             }
         }
 
+        if (n == 1)
+            commonPrefix += " ";
+
         if (commonPrefix.Length > 0)
-            _autocompleteInsertText = commonPrefix + " ";
+            _autocompleteInsertText = commonPrefix;
 
         L.Debug($"Common prefix for autocomplete: |{commonPrefix}|");
+    }
+
+    private bool[] _registerUsage = new bool[16];
+
+    private void UpdateRegisterUsage()
+    {
+        for (int i = 0; i < 16; i++)
+            _registerUsage[i] = false;
+
+        foreach (var line in Lines)
+            foreach (var token in line)
+                if (IC10Utils.Registers.Contains(token.Text) && token.Text.StartsWith("r") && token.Text != "ra")
+                {
+                    var reg = token.Text;
+                    while (reg.StartsWith("rr") && reg.Length > 3)
+                        reg = reg.Substring(1);
+                    if (int.TryParse(reg.Substring(1), out int regNum))
+                    {
+                        if (regNum >= 0 && regNum < 16)
+                            _registerUsage[regNum] = true;
+                        else L.Warning($"Register number out of range: {reg}");
+                    }
+                    else L.Warning($"Failed to parse register number: {reg}");
+                    _registerUsage[int.Parse(reg.Substring(1))] = true;
+                }
+    }
+
+    public override void DrawStatus(Vector2 pos)
+    {
+        base.DrawStatus(pos);
+        DrawRegisterUsage();
+    }
+
+
+    public void DrawRegisterUsage()
+    {
+
+        var drawList = ImGui.GetWindowDrawList();
+
+        Vector2 startPos = ImGui.GetCursorScreenPos();
+        Vector2 windowSize = ImGui.GetWindowSize();
+
+        Vector2 rectSize = new Vector2(9, 9) * Settings.Scale;
+        float spacing = 4.0f * Settings.Scale;
+
+        startPos.x = ImGui.GetWindowPos().x + ImGui.GetWindowWidth() - 3 * Settings.buttonSize.x - ImGui.GetStyle().FramePadding.x * 3 - ImGui.GetStyle().ItemSpacing.x;
+        startPos.y += 8.0f;
+
+        uint colorUsed = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 1.0f));
+        uint colorFree = ImGui.GetColorU32(new Vector4(0.0f, 1.0f, 0.0f, 1.0f));
+
+        float x0 = startPos.x;
+
+        for (int i = 0; i < 16; i++)
+        {
+            uint color = _registerUsage[i] ? colorUsed : colorFree;
+            int xShift = i + i / 4; // add extra space every 4 registers
+            startPos.x = x0 + xShift * (rectSize.x + spacing);
+            drawList.AddCircleFilled(startPos + rectSize / 2, rectSize.x / 2, color, 12);
+        }
     }
 }

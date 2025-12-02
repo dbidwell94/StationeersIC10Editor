@@ -123,6 +123,7 @@ namespace StationeersIC10Editor
 
                 CodeFormatters.RegisterFormatter("Plain", typeof(PlainTextFormatter));
                 CodeFormatters.RegisterFormatter("IC10", typeof(IC10.IC10CodeFormatter), true);
+                // CodeFormatters.RegisterFormatter("LSP", typeof(ImGuiEditor.LSP.LSPFormatter));
             }
             catch (Exception ex)
             {
@@ -134,9 +135,11 @@ namespace StationeersIC10Editor
 
         private void OnDestroy()
         {
-            // L.Info($"OnDestroy ${PluginName} {VersionInfo.VersionGit}");
-            // IC10EditorPatches.Cleanup();
-            // _harmony.UnpatchSelf();
+#if DEBUG
+            L.Info($"OnDestroy ${PluginName} {VersionInfo.VersionGit}");
+            IC10EditorPatches.Cleanup();
+            _harmony.UnpatchSelf();
+#endif
         }
     }
 }

@@ -9,43 +9,123 @@ using UnityEngine;
 
 using static Settings;
 
-/// <summary>
-/// Line acts as the Source Buffer for a single line of code.
-/// It holds the raw string and a list of SemanticTokens pointing to ranges within that string.
-/// </summary>
-public class Line
+// style struct to hold color and background info
+// there will be more fields later (squiggle underlines for instance)
+public struct Style
 {
-    private string _content;
+    public uint Color;
+    public uint Background;
+
+    public Style(uint color = 0xFFFFFFFF, uint background = 0)
+    {
+        Color = color;
+        Background = background;
+    }
+
+    public static implicit operator Style(uint color)
+    {
+        return new Style(color, 0);
+    }
+
+}
+
+public class Token
+{
+    public int Column;
+    public string Text;
+    public Style Style;
+    public int Length => Text.Length;
+
+    public uint Type = 0;
+    public StyledText Tooltip = null;
+    public StyledText Error = null;
+
+    public bool IsError => Error != null;
+
+    public Token(int column, string text, Style style = new Style(), uint type = 0)
+    {
+        Column = column;
+        Text = text;
+        Style = style;
+        Type = type;
+    }
+
+    public uint Color => Style.Color;
+    public uint Background => Style.Background;
+}
+
+public class StyledLine : List<Token>
+{
+    protected string _content = "";
     public string Text
     {
         get => _content;
         set => _content = value ?? string.Empty;
     }
 
-    public List<SemanticToken> Tokens { get; private set; } = new List<SemanticToken>();
-
     public int Length => _content.Length;
 
-    public Line(string text)
+    public StyledLine(string text, List<SemanticToken> tokens = null)
+        : base()
     {
         _content = text ?? string.Empty;
+
+        if(tokens != null)
+            Update(tokens);
     }
 
-    public void ClearTokens()
+    public void Update(List<SemanticToken> tokens)
     {
-        Tokens.Clear();
-    }
+        tokens.Sort((a, b) => a.Column.CompareTo(b.Column));
+        Clear();
+        // L.Info($"Updating StyledTokens for line: {_content}");
 
-    public void AddToken(SemanticToken token)
-    {
-        Tokens.Add(token);
+        int column = 0;
+        int len = _content.Length;
+
+        foreach (var token in tokens)
+        {
+            if (column >= len)
+                break;
+
+            if (token.Column + token.Length > len)
+                break;
+
+            // Add plain text before token
+            if (token.Column > column)
+            {
+                // L.Info($"Adding plain text from col {column} to {token.Column}");
+                string plainText = _content.Substring(column, token.Column - column);
+                if (!string.IsNullOrEmpty(plainText))
+                    Add(new Token(column, plainText, ICodeFormatter.DefaultStyle));
+                column = token.Column;
+            }
+
+            // Add token text
+            if (token.Column + token.Length <= len)
+            {
+                // L.Info($"Adding token text from col {token.Column} length {token.Length}");
+                string tokenText = _content.Substring(token.Column, token.Length);
+                Add(new Token(token.Column, tokenText, token.Style));
+                column = token.Column + token.Length;
+            }
+        }
+
+        if (column < len)
+        {
+            // L.Info($"Adding trailing plain text from col {column} to end");
+            string plainText = _content.Substring(column, len - column);
+            if (!string.IsNullOrEmpty(plainText))
+                Add(new Token(column, plainText));
+        }
+
     }
 
     // Helper to find a token at a specific column
-    public SemanticToken? GetTokenAt(int column)
+    public Token GetTokenAt(int column)
     {
         // Simple linear search. For very long lines, binary search could be used if tokens are sorted.
-        foreach (var token in Tokens)
+        foreach (var token in this)
         {
             if (column >= token.Column && column < token.Column + token.Length)
                 return token;
@@ -53,88 +133,52 @@ public class Line
         return null;
     }
 
-    public string GetTokenText(int index)
-    {
-        var token = Tokens[index];
-        if (token.Column + token.Length <= _content.Length)
-            return _content.Substring(token.Column, token.Length);
-        return string.Empty;
-    }
-
     public void Draw(Vector2 pos, int lineIndex)
     {
-        var drawList = ImGui.GetWindowDrawList();
-        float startX = pos.x;
-
-        // 1. Draw Backgrounds first
-        foreach (var token in Tokens)
+        var list = ImGui.GetWindowDrawList();
+        if (this.Count == 0)
+        {
+            if (!string.IsNullOrEmpty(_content))
+                list.AddText(pos, ICodeFormatter.ColorDefault, _content);
+            return;
+        }
+        foreach (var token in this)
         {
             if (token.Background != 0)
             {
-                var tokenPos = new Vector2(startX + CharWidth * token.Column, pos.y);
-                drawList.AddRectFilled(
-                    tokenPos,
-                    new Vector2(tokenPos.x + CharWidth * token.Length, tokenPos.y + LineHeight),
-                    token.Background
+                Vector2 start = new Vector2(
+                    pos.x + CharWidth * token.Column,
+                    pos.y
                 );
-            }
-        }
-
-        // 2. Draw Text
-        // We iterate through the tokens to draw colored segments.
-        // Text *not* covered by a token is drawn with the default color.
-
-        int currentDrawIndex = 0;
-
-        // Ensure tokens are sorted by column for drawing order
-        Tokens.Sort((a, b) => a.Column.CompareTo(b.Column));
-
-        foreach (var token in Tokens)
-        {
-            // Draw gap before token (if any)
-            if (token.Column > currentDrawIndex)
-            {
-                int len = token.Column - currentDrawIndex;
-                if (currentDrawIndex + len <= _content.Length)
-                {
-                    string segment = _content.Substring(currentDrawIndex, len);
-                    drawList.AddText(
-                        new Vector2(startX + CharWidth * currentDrawIndex, pos.y),
-                        ICodeFormatter.ColorDefault,
-                        segment
-                    );
-                }
-            }
-
-            // Draw token
-            if (token.Column + token.Length <= _content.Length)
-            {
-                string segment = _content.Substring(token.Column, token.Length);
-                drawList.AddText(
-                    new Vector2(startX + CharWidth * token.Column, pos.y),
-                    token.Color,
-                    segment
+                Vector2 end = new Vector2(
+                    pos.x + CharWidth * (token.Column + token.Text.Length),
+                    pos.y + ImGui.GetTextLineHeightWithSpacing()
                 );
+                list.AddRectFilled(start, end, token.Background);
             }
 
-            currentDrawIndex = token.Column + token.Length;
-        }
-
-        // Draw remaining text after last token
-        if (currentDrawIndex < _content.Length)
-        {
-            string segment = _content.Substring(currentDrawIndex);
-            drawList.AddText(
-                new Vector2(startX + CharWidth * currentDrawIndex, pos.y),
-                ICodeFormatter.ColorDefault,
-                segment
+            list.AddText(
+                new Vector2(pos.x + CharWidth * token.Column, pos.y),
+                token.Color,
+                token.Text
             );
+
         }
     }
 }
 
-public class FormattedText : List<Line>
+
+public class StyledText : List<StyledLine>
 {
+
+    public StyledText() : base() { }
+    public StyledText(string text) : base()
+    {
+
+        foreach (var line in text.Split('\n'))
+            Add(new StyledLine(line));
+    }
+
     public float Width
     {
         get
@@ -154,7 +198,7 @@ public class FormattedText : List<Line>
         get { return string.Join("\n", this.ConvertAll(line => line.Text)); }
     }
 
-    public SemanticToken? GetTokenAtPosition(TextPosition pos)
+    public Token GetTokenAtPosition(TextPosition pos)
     {
         if (pos.Line < 0 || pos.Line >= Count)
             return null;
@@ -169,22 +213,39 @@ public class FormattedText : List<Line>
             pos.y += LineHeight;
         }
     }
+
+    public static StyledText ErrorText(string message)
+    {
+        var text = new StyledText();
+        var line = new StyledLine(message);
+        var errorStyle = new Style(ICodeFormatter.ColorError);
+        line.Add(new Token(0, message, errorStyle));
+        text.Add(line);
+        return text;
+    }
 }
+
 
 public abstract class ICodeFormatter
 {
+    public const uint ColorDefault = 0xFFFFFFFF;
     public static uint ColorError = ColorFromHTML("#ff0000");
     public static uint ColorWarning = ColorFromHTML("#ff8f00");
     public static uint ColorComment = ColorFromHTML("#808080");
     public static uint ColorLineNumber = ColorFromHTML("#808080");
-    public static uint ColorDefault = ColorFromHTML("#ffffff");
     public static uint ColorSelection = ColorFromHTML("#1a44b0ff");
     public static uint ColorNumber = ColorFromHTML("#20b2aa");
     public static float LineNumberOffset = 5.3f;
 
-    public FormattedText Lines = new FormattedText();
+    public static Style DefaultStyle = new Style
+    {
+        Color = ColorDefault,
+        Background = 0
+    };
+
+    public StyledText Lines = new StyledText();
     public string RawText => Lines.RawText;
-    public Line CurrentLine
+    public StyledLine CurrentLine
     {
         get
         {
@@ -195,10 +256,10 @@ public abstract class ICodeFormatter
     }
     public string Name = "";
 
-    protected FormattedText _status = null;
-    protected FormattedText _autocomplete = null;
+    protected StyledText _status = null;
+    protected StyledText _autocomplete = null;
     protected string _autocompleteInsertText = null;
-    protected FormattedText _tooltip = null;
+    protected StyledText _tooltip = null;
     protected TextPosition _lastCaretPos = new TextPosition(-1, -1);
     protected Vector2 _lastMousePos = new Vector2(-1, -1);
     public IEditor Editor;
@@ -206,13 +267,13 @@ public abstract class ICodeFormatter
     public Vector2 MousePos => _lastMousePos;
     public TextPosition CaretPos => _lastCaretPos;
 
-    public FormattedText Status => _status;
-    public FormattedText Tooltip => _tooltip;
+    public StyledText Status => _status;
+    public StyledText Tooltip => _tooltip;
 
     public Action OnCodeChanged = () => { };
     public Action OnCaretMoved = () => { };
 
-    public abstract Line ParseLine(string line);
+    public abstract StyledLine ParseLine(string line);
 
     public ICodeFormatter()
     {
@@ -340,7 +401,7 @@ public abstract class ICodeFormatter
 
         int selectionMin = -1,
             selectionMax = -1;
-        Line line = Lines[lineIndex];
+        StyledLine line = Lines[lineIndex];
 
         // Calculate Selection Rect
         if (selection)
@@ -379,24 +440,30 @@ public abstract class ICodeFormatter
         var token = Lines.GetTokenAtPosition(mouseTextPos);
         if (token == null)
             return;
-        if (string.IsNullOrEmpty(token.Value.Data))
-            return;
 
-        var tooltip = new FormattedText();
-        // Assuming Data holds error or tooltip info.
-        // If it's an error token, we color red, else default/white.
-        uint color = token.Value.IsError ? ColorError : ColorDefault;
-
-        // Simple handling: if Data contains newlines, create multiple lines
-        foreach (var lineStr in token.Value.Data.Split('\n'))
+        _tooltip = token.Tooltip;
+        if (token.Error != null)
         {
-            var l = new Line(lineStr);
-            // We add a "fake" token just to color the tooltip text
-            l.AddToken(new SemanticToken(0, 0, lineStr.Length, color, 0));
-            tooltip.Add(l);
+            _tooltip = token.Error;
         }
-
-        _tooltip = tooltip;
+        // if (string.IsNullOrEmpty(token.Tooltip))
+        //     return;
+        //
+        // var tooltip = new StyledText();
+        // // Assuming Data holds error or tooltip info.
+        // // If it's an error token, we color red, else default/white.
+        // uint color = token.IsError ? ColorError : ColorDefault;
+        //
+        // // Simple handling: if Data contains newlines, create multiple lines
+        // foreach (var lineStr in token.Data.Split('\n'))
+        // {
+        //     var l = new Line(lineStr);
+        //     // We add a "fake" token just to color the tooltip text
+        //     l.AddToken(new SemanticToken(0, 0, lineStr.Length, color, 0));
+        //     tooltip.Add(l);
+        // }
+        //
+        // _tooltip = tooltip;
     }
 
     public virtual void UpdateStatus()
@@ -408,18 +475,8 @@ public abstract class ICodeFormatter
         var token = Lines.GetTokenAtPosition(CaretPos);
         if (token == null)
             return;
-        if (string.IsNullOrEmpty(token.Value.Data))
-            return;
 
-        var status = new FormattedText();
-        uint color = token.Value.IsError ? ColorError : ColorDefault;
-        foreach (var lineStr in token.Value.Data.Split('\n'))
-        {
-            var l = new Line(lineStr);
-            l.AddToken(new SemanticToken(0, 0, lineStr.Length, color, 0));
-            status.Add(l);
-        }
-        _status = status;
+        _status = token.Error;
     }
 
     public virtual void UpdateAutocomplete()
@@ -447,12 +504,16 @@ public abstract class ICodeFormatter
 
     public virtual void Update(TextPosition caretPos, Vector2 mousePos, TextPosition mouseTextPos)
     {
-        if (!mousePos.Equals(_lastMousePos))
-        {
-            UpdateTooltip(mouseTextPos);
-        }
+        bool hasMouseMoved = !mousePos.Equals(_lastMousePos);
+        bool hasCaretMoved = !caretPos.Equals(_lastCaretPos);
+
         _lastCaretPos = caretPos;
         _lastMousePos = mousePos;
+
+        if (hasMouseMoved)
+            UpdateTooltip(mouseTextPos);
+        if (hasCaretMoved)
+            OnCaretMoved();
     }
 
     public virtual void DrawStatus(Vector2 pos)

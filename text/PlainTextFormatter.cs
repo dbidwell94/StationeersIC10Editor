@@ -8,9 +8,9 @@ public class PlainTextFormatter : ICodeFormatter
         return 0.001;
     }
 
-    public override Line ParseLine(string line)
+    public override StyledLine ParseLine(string line)
     {
-        var l = new Line(line);
+        var l = new StyledLine(line);
         // Plain text has no semantic tokens, so it will be drawn using the default logic (white/default color).
         return l;
     }

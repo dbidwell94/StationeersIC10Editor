@@ -424,7 +424,7 @@ public class IC10OpCode
     public List<ArgType> ArgumentTypes = new List<ArgType>();
     public bool IsBuiltin = true;
 
-    public FormattedText Tooltip = new FormattedText();
+    public StyledText Tooltip = new StyledText();
 
     public IC10OpCode(string name, string description, string example)
     {
@@ -433,33 +433,24 @@ public class IC10OpCode
         Description = description;
         float w = 0.0f;
         float wmax = 0.0f;
-        FormattedText TooltipHeader = ParseColoredText($"Instruction: <color=yellow>{name}</color>", ref wmax);
-        Line TooltipExample = ParseColoredText($"    {example}", ref w)[0];
+        StyledText TooltipHeader = ParseColoredText($"Instruction: <color=yellow>{name}</color>", ref wmax);
+        StyledLine TooltipExample = ParseColoredText($"    {example}", ref w)[0];
         wmax = Math.Max(wmax, w);
 
-        L.Debug($"Parsing opcode {name} example: {example}");
-
-        for (var j = 0; j < TooltipExample.Tokens.Count; j++)
-        {
-            var t = TooltipExample.Tokens[j];
-            L.Debug($"  Token {j}: col={t.Column} '{TooltipExample.Text.Substring(t.Column, t.Length)}'");
-        }
-
         int i = 1;
-        while (i < TooltipExample.Tokens.Count)
+        while (i < TooltipExample.Count)
         {
-            var s = TooltipExample.GetTokenText(i);
-            L.Debug($"  Token {i}: '{s}'");
+            var s = TooltipExample[i].Text;
             if (s.Contains("(") || s.Contains(")"))
             {
                 i++;
                 continue;
             }
 
-            while (i + 2 < TooltipExample.Tokens.Count && TooltipExample.GetTokenText(i + 1).Trim() == "|")
+            while (i + 2 < TooltipExample.Count && TooltipExample[i + 1].Text.Trim() == "|")
             {
-                s += TooltipExample.GetTokenText(i + 1);
-                s += TooltipExample.GetTokenText(i + 2);
+                s += TooltipExample[i + 1].Text;
+                s += TooltipExample[i + 2].Text;
                 i += 2;
             }
 
@@ -470,7 +461,6 @@ public class IC10OpCode
             foreach (var token in s.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 var trimmed = token.Trim().TrimEnd(',', ')');
-                L.Debug($"    Arg token: '{trimmed}'");
                 switch (trimmed)
                 {
                     case "r?":
@@ -515,18 +505,18 @@ public class IC10OpCode
             ArgumentTypes.Add(argType);
         }
 
-        Tooltip = new FormattedText();
+        Tooltip = new StyledText();
         Tooltip.AddRange(TooltipHeader);
-        Tooltip.Add(new Line(""));
+        Tooltip.Add(new StyledLine(""));
         Tooltip.Add(TooltipExample);
-        Tooltip.Add(new Line(""));
+        Tooltip.Add(new StyledLine(""));
         var descriptionLine = "";
         int column = 0;
         foreach (var word in Description.Split(' '))
         {
             if (column + word.Length > 70)
             {
-                Tooltip.Add(new Line(descriptionLine));
+                Tooltip.Add(new StyledLine(descriptionLine));
                 descriptionLine = "";
                 column = 0;
             }
@@ -555,9 +545,9 @@ public class IC10OpCode
         return lines;
     }
 
-    public static FormattedText ParseColoredText(string input, ref float width)
+    public static StyledText ParseColoredText(string input, ref float width)
     {
-        var result = new FormattedText();
+        var result = new StyledText();
         var lines = input.Split('\n');
         var C = (Func<string, uint>)((string color) => ICodeFormatter.ColorFromHTML(color));
 
@@ -569,7 +559,7 @@ public class IC10OpCode
             // We need to build the "Clean" text for the Line content
             StringBuilder cleanText = new StringBuilder();
             // We need to track where semantic tokens map to the clean text
-            List<SemanticToken> tokens = new List<SemanticToken>();
+            List<Token> tokens = new List<Token>();
 
             int currentColumn = 0;
 
@@ -583,7 +573,7 @@ public class IC10OpCode
                     // Add a token for plain text with default color
                     if (!string.IsNullOrWhiteSpace(rawText))
                         tokens.Add(
-                            new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0)
+                            new Token(currentColumn, rawText, C("#ffffff"))
                         );
                     currentColumn += rawText.Length;
                 }
@@ -593,7 +583,7 @@ public class IC10OpCode
                 string text = match.Groups[2].Value;
                 cleanText.Append(text);
                 if (!string.IsNullOrWhiteSpace(text))
-                    tokens.Add(new SemanticToken(0, currentColumn, text.Length, C(colorStr), 0));
+                    tokens.Add(new Token(currentColumn, text, C(colorStr)));
                 currentColumn += text.Length;
 
                 lastIndex = match.Index + match.Length;
@@ -605,13 +595,13 @@ public class IC10OpCode
                 string rawText = lineStr.Substring(lastIndex);
                 cleanText.Append(rawText);
                 if (!string.IsNullOrWhiteSpace(rawText))
-                    tokens.Add(new SemanticToken(0, currentColumn, rawText.Length, C("#ffffff"), 0));
+                    tokens.Add(new Token(currentColumn, rawText, C("#ffffff")));
             }
 
             // Create the Line with clean text
-            var resultLine = new Line(cleanText.ToString());
+            var resultLine = new StyledLine(cleanText.ToString());
             foreach (var t in tokens)
-                resultLine.AddToken(t);
+                resultLine.Add(t);
 
             result.Add(resultLine);
         }
@@ -621,7 +611,7 @@ public class IC10OpCode
 }
 
 // IC10Line updated to work with SemanticToken logic
-public class IC10Line : Line
+public class IC10Line : StyledLine
 {
     public IC10Line(string text = "")
         : base(text)
@@ -629,14 +619,14 @@ public class IC10Line : Line
         // Tokens are populated by IC10CodeFormatter
     }
 
-    public bool IsLabel => Tokens.Count == 1 && GetDataType(0) == DataType.Label;
-    public bool IsAlias => Tokens.Count == 3 && GetDataType(0) == DataType.Alias;
+    public bool IsLabel => Count == 1 && GetDataType(0) == DataType.Label;
+    public bool IsAlias => Count == 3 && GetDataType(0) == DataType.Alias;
     public bool IsNumAlias =>
         IsAlias && (GetDataType(2) == DataType.Number || GetDataType(2) == DataType.Register);
     public bool IsDevAlias => IsAlias && GetDataType(2) == DataType.Device;
     public bool IsDefine =>
-        Tokens.Count == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
-    public bool IsInstruction => Tokens.Count > 0 && GetDataType(0) == DataType.Instruction;
+        Count == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
+    public bool IsInstruction => Count > 0 && GetDataType(0) == DataType.Instruction;
 
     // Counts actual semantic tokens (excluding whitespace/comments if they are treated as tokens,
     // but in SemanticToken model, everything interesting is a token.
@@ -645,13 +635,10 @@ public class IC10Line : Line
     {
         get
         {
-            int count = 0;
-            foreach (var t in Tokens)
-            {
-                if ((DataType)t.Type != DataType.Comment)
-                    count++;
-            }
-            return count;
+            if (Count == 0)
+                return 0;
+            var lastToken= this[Count - 1];
+            return lastToken.Text.StartsWith("#") ? Count - 1 : Count;
         }
     }
 
@@ -660,7 +647,7 @@ public class IC10Line : Line
         // This is tricky because Tokens list might contain comments or be sorted by column.
         // We need the i-th *code* token.
         int current = 0;
-        foreach (var t in Tokens)
+        foreach (var t in this)
         {
             if ((DataType)t.Type == DataType.Comment)
                 continue;
@@ -706,24 +693,36 @@ public class IC10Line : Line
     // Since IC10CodeFormatter calls specific logic, we can rely on that.
     // But if we want to update types dynamically (e.g. after alias change):
 
-    public void UpdateTokenColors(Dictionary<string, DataType> types)
+    public void UpdateTokenColors(Dictionary<string, DataType> types, HashSet<string> changedNames = null)
     {
         // We need to re-evaluate token types.
         // Since SemanticToken is a struct, we iterate by index to modify.
-        for (int i = 0; i < Tokens.Count; i++)
+        for (int i = 0; i < Count; i++)
         {
-            var t = Tokens[i];
-            string text = Text.Substring(t.Column, t.Length);
+            var t = this[i];
+            string text = t.Text;
+            bool isUnknown = false;
 
             // Re-resolve type if it was an identifier
             if (types.TryGetValue(text, out DataType newType))
             {
-                if(t.IsError)
-                    t.Data = null;
-                t.Type = (uint)newType;
-                t.Color = IC10CodeFormatter.GetColor(newType, text);
-                t.Background = IC10CodeFormatter.GetBackgroundColor(newType, text);
-                Tokens[i] = t;
+                isUnknown = newType == DataType.Unknown;
+                if (!isUnknown)
+                {
+                    t.Error = null;
+                    t.Type = (uint)newType;
+                    t.Style = new Style(IC10CodeFormatter.GetColor(newType, text),
+                     IC10CodeFormatter.GetBackgroundColor(newType, text));
+                }
+            }
+            else if (changedNames != null && changedNames.Contains(text))
+                isUnknown = true;
+
+            if (isUnknown)
+            {
+                t.Error = StyledText.ErrorText("Undefined identifier");
+                t.Type = (uint)DataType.Unknown;
+                t.Style = new Style(IC10CodeFormatter.GetColor(DataType.Unknown, text), IC10CodeFormatter.GetBackgroundColor(DataType.Unknown, text));
             }
         }
     }
