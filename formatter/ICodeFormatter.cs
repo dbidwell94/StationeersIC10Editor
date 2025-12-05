@@ -13,8 +13,8 @@ using static Settings;
 // there will be more fields later (squiggle underlines for instance)
 public struct Style
 {
-    public uint Color;
-    public uint Background;
+    public uint Color = 0xFFFFFFFF;
+    public uint Background = 0;
 
     public Style(uint color = 0xFFFFFFFF, uint background = 0)
     {
@@ -70,7 +70,7 @@ public class StyledLine : List<Token>
     {
         _content = text ?? string.Empty;
 
-        if(tokens != null)
+        if (tokens != null)
             Update(tokens);
     }
 
@@ -78,7 +78,6 @@ public class StyledLine : List<Token>
     {
         tokens.Sort((a, b) => a.Column.CompareTo(b.Column));
         Clear();
-        // L.Info($"Updating StyledTokens for line: {_content}");
 
         int column = 0;
         int len = _content.Length;
@@ -88,37 +87,30 @@ public class StyledLine : List<Token>
             if (column >= len)
                 break;
 
-            if (token.Column + token.Length > len)
+            if (token.Column >= len)
                 break;
+
+            if (token.Column + token.Length > len)
+                continue;
 
             // Add plain text before token
             if (token.Column > column)
             {
-                // L.Info($"Adding plain text from col {column} to {token.Column}");
                 string plainText = _content.Substring(column, token.Column - column);
-                if (!string.IsNullOrEmpty(plainText))
-                    Add(new Token(column, plainText, ICodeFormatter.DefaultStyle));
+                Add(new Token(column, plainText, ICodeFormatter.DefaultStyle));
                 column = token.Column;
             }
 
-            // Add token text
-            if (token.Column + token.Length <= len)
-            {
-                // L.Info($"Adding token text from col {token.Column} length {token.Length}");
-                string tokenText = _content.Substring(token.Column, token.Length);
-                Add(new Token(token.Column, tokenText, token.Style));
-                column = token.Column + token.Length;
-            }
+            string tokenText = _content.Substring(token.Column, token.Length);
+            Add(new Token(token.Column, tokenText, token.Style));
+            column = token.Column + token.Length;
         }
 
         if (column < len)
         {
-            // L.Info($"Adding trailing plain text from col {column} to end");
             string plainText = _content.Substring(column, len - column);
-            if (!string.IsNullOrEmpty(plainText))
-                Add(new Token(column, plainText));
+            Add(new Token(column, plainText, ICodeFormatter.DefaultStyle));
         }
-
     }
 
     // Helper to find a token at a specific column
