@@ -319,7 +319,7 @@ namespace StationeersIC10Editor
                 // merging does not happen accross "large" changes (e.g. paste, cut, delete selection etc.)
                 if (merge && first.Mergeable && state.Timestamp < first.Timestamp + 500)
                 {
-                    L.Info($" Merging undo state, time diff {state.Timestamp - first.Timestamp}");
+                    L.Debug($" Merging undo state, time diff {state.Timestamp - first.Timestamp}");
                     UndoList.RemoveFirst();
                 }
             }

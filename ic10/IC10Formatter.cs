@@ -167,14 +167,6 @@ public class IC10CodeFormatter : ICodeFormatter
             );
         }
 
-        L.Info($"Parsed line: {line}");
-        string tokenSummary = "";
-        foreach (var t in line)
-        {
-            tokenSummary += $"|{t.Text}:{(DataType)t.Type}| ";
-        }
-        L.Info($"\tTokens: {tokenSummary}");
-
         return line;
     }
 
