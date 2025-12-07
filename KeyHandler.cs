@@ -797,7 +797,7 @@ namespace StationeersIC10Editor
                 }
             }
 
-            if (ImGui.IsKeyPressed(ImGuiKey.Enter))
+            if (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
             {
                 OnKeyPressed("Enter");
                 if (!VimEnabled)

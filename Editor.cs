@@ -1080,7 +1080,7 @@ namespace StationeersIC10Editor
                 // Search if Enter pressed or text changed
                 if (
                     ImGui.IsItemDeactivatedAfterEdit()
-                    || ImGui.IsItemFocused() && ImGui.IsKeyPressed(ImGuiKey.Enter)
+                    || ImGui.IsItemFocused() && (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
                 )
                 {
                     if (_librarySearchResults.Count > 0)
