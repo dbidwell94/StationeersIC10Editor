@@ -1013,6 +1013,7 @@ namespace StationeersIC10Editor
 
         private bool _librarySearchVisible = false;
         private string _librarySearchText = "";
+        public bool IsLibrarySearchVisible => _librarySearchVisible;
 
         private bool _librarySearchJustOpened = false;
         private int _librarySelectedIndex = -1;
@@ -1817,7 +1818,7 @@ namespace StationeersIC10Editor
             ImGui.End();
             ImGui.PopStyleColor();
 
-            if (_hasFocus && IsMouseInsideTextArea())
+            if (_hasFocus && !IsLibrarySearchVisible && IsMouseInsideTextArea())
             {
                 ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
                 if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
