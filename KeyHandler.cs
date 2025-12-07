@@ -284,6 +284,7 @@ namespace StationeersIC10Editor
                     string oldCode = editor.GetCode(range);
                     editor.DeleteRange(range);
                     editor.Insert(Argument.PadRight(oldCode.Length, Argument[0]));
+                    editor.CaretPos = new TextPosition(editor.CaretLine, editor.CaretCol-1);
                     break;
                 case "y":
                 case "yy":
