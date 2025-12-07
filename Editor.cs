@@ -391,6 +391,9 @@ namespace StationeersIC10Editor
             if (pos.Col == 0)
                 return false;
 
+            if(pos.Line >= Lines.Count)
+                return true;
+
             if (pos.Col >= Lines[pos.Line].Length)
                 return true;
 
