@@ -32,12 +32,11 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.4.3:
+        0.6.0:
 
-        - Fix position calculation when clicking to text (again)
-        - Show vertical line between line numbers and code
-        - Configurable line spacing
-        - Input field for UI Scaling instead of slider
+        - Lots of internal code refactoring
+        - Interface for other programming languages
+        - Handle numpad enter key
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
