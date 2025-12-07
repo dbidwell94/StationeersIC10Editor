@@ -523,6 +523,9 @@ public class IC10OpCode
             descriptionLine += (descriptionLine.Length > 0 ? " " : "") + word;
             column += word.Length + 1;
         }
+
+        if (descriptionLine.Length > 0)
+            Tooltip.Add(new StyledLine(descriptionLine));
     }
 
     private static List<string> WrapText(string text, int maxLen)
