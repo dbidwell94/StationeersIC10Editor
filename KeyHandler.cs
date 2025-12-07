@@ -814,7 +814,14 @@ namespace StationeersIC10Editor
             {
                 char c = (char)io.InputQueueCharacters[i];
                 if (c == '\t')
-                    Editor.CodeFormatter.PerformAutocomplete();
+                {
+                    string lineStart = CurrentLine.Substring(0, CaretCol);
+                    if(string.IsNullOrWhiteSpace(lineStart))
+                        input += "  ";
+                    else
+                        Editor.CodeFormatter.PerformAutocomplete();
+
+                }
                 else
                     input += c;
             }
