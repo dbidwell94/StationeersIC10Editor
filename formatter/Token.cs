@@ -4,7 +4,7 @@ namespace StationeersIC10Editor
     /// Represents a lightweight pointer to a range in the source buffer.
     /// Does NOT hold the text content itself.
     /// </summary>
-    public class SemanticToken
+    public struct SemanticToken
     {
         public int Line; // Line index (0-based)
         public int Column; // Start column index (0-based)
