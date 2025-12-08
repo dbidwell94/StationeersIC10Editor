@@ -321,6 +321,11 @@ public struct ArgType
 
     public ArgType() { }
 
+    public uint ToUInt()
+    {
+        return Value;
+    }
+
     public static implicit operator ArgType(DataType b)
     {
         ArgType at = new ArgType();
@@ -414,6 +419,13 @@ public struct ArgType
                 at.Add(DataType.Number);
             return at;
         }
+    }
+
+    public ArgType CommonType(ArgType other)
+    {
+        ArgType common = new ArgType();
+        common.Value = this.Value & other.Value;
+        return common;
     }
 }
 

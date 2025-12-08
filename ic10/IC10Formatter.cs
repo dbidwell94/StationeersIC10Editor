@@ -183,11 +183,11 @@ public class IC10CodeFormatter : ICodeFormatter
             t.Tooltip = null;
             t.Error = null;
             string txt = t.Text;
-            DataType dt = DataType.Unknown;
+            ArgType dt = DataType.Unknown;
             string error = null;
 
             if (IC10Utils.IsBuiltin(txt))
-                dt = IC10Utils.Types[txt].ToDataType();
+                dt = IC10Utils.Types[txt];
             else if (txt.EndsWith(":"))
                 dt = DataType.Label;
             else if (types.TryGetValue(txt, out DataType type))
@@ -224,19 +224,14 @@ public class IC10CodeFormatter : ICodeFormatter
                 error = "Unknown identifier";
             }
 
-            if (dt == DataType.Instruction)
+            if (dt.Has(DataType.Instruction))
                 t.Tooltip = IC10Utils.Instructions[txt].Tooltip;
 
             if (i == 0)
             {
-                isInstructionLine = dt == DataType.Instruction;
-                if (
-                    !isInstructionLine
-                    && dt != DataType.Label
-                    && dt != DataType.Alias
-                    && dt != DataType.Define
-                    && dt != DataType.Comment
-                )
+                ArgType validFirstType = DataType.Instruction | DataType.Label | DataType.Alias | DataType.Define;
+                isInstructionLine = dt.Has(DataType.Instruction);
+                if(!validFirstType.Has(dt))
                     error = $"Unknown instruction '{txt}'";
             }
 
@@ -247,13 +242,16 @@ public class IC10CodeFormatter : ICodeFormatter
                 if (argIndex < opcode.ArgumentTypes.Count)
                 {
                     var expected = opcode.ArgumentTypes[argIndex];
+                    var compat = expected.Compat;
 
-                    if (!expected.Compat.Has(dt))
+                    if (!compat.Has(dt))
                     {
                         error =
                             $"Invalid argument type {dt}, expected {expected.Description}";
                         dt = DataType.Unknown;
                     }
+
+                    dt = compat.CommonType(dt);
                 }
                 else
                 {
@@ -261,9 +259,10 @@ public class IC10CodeFormatter : ICodeFormatter
                 }
             }
 
-            t.Type = (uint)dt;
-            t.Style = new Style(error != null ? ColorError : GetColor(dt, txt),
-             GetBackgroundColor(dt, txt));
+            var concreteType = dt.ToDataType();
+            t.Type = (uint)concreteType;
+            t.Style = new Style(error != null ? ColorError : GetColor(concreteType, txt),
+             GetBackgroundColor(concreteType, txt));
             if (error != null)
                 t.Error = StyledText.ErrorText(error);
 
