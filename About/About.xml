@@ -2,7 +2,7 @@
 <ModMetadata xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>IC10 Editor</Name>
   <Author>aproposmath</Author>
-  <Version>0.4.3</Version>
+  <Version>0.6.1</Version>
   <Description>
         Custom IC10 editor with more features (and no lag!)
 
@@ -32,11 +32,9 @@
         Source Code: https://github.com/aproposmath/StationeersIC10Editor
     </Description>
   <ChangeLog>
-        0.6.0:
+        0.6.1:
 
-        - Lots of internal code refactoring
-        - Interface for other programming languages
-        - Handle numpad enter key
+        - Fix exception when code is reset
   </ChangeLog>
   <WorkshopHandle>3592775931</WorkshopHandle>
   <Tags>
