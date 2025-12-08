@@ -284,7 +284,7 @@ namespace StationeersIC10Editor
                     string oldCode = editor.GetCode(range);
                     editor.DeleteRange(range);
                     editor.Insert(Argument.PadRight(oldCode.Length, Argument[0]));
-                    editor.CaretPos = new TextPosition(editor.CaretLine, editor.CaretCol-1);
+                    editor.CaretPos = new TextPosition(editor.CaretLine, editor.CaretCol - 1);
                     break;
                 case "y":
                 case "yy":
@@ -816,7 +816,7 @@ namespace StationeersIC10Editor
                 if (c == '\t')
                 {
                     string lineStart = CurrentLine.Substring(0, CaretCol);
-                    if(string.IsNullOrWhiteSpace(lineStart))
+                    if (string.IsNullOrWhiteSpace(lineStart))
                         input += "  ";
                     else
                         Editor.CodeFormatter.PerformAutocomplete();

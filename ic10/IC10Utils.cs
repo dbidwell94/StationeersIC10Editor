@@ -652,7 +652,7 @@ public class IC10Line : StyledLine
         {
             if (Count == 0)
                 return 0;
-            var lastToken= this[Count - 1];
+            var lastToken = this[Count - 1];
             return lastToken.Text.StartsWith("#") ? Count - 1 : Count;
         }
     }

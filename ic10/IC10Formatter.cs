@@ -4,10 +4,13 @@ namespace StationeersIC10Editor.IC10;
 //     update on line called too often(and throws away data if there are no semantic tokens)
 //     -> relevant in tooltips
 
-using Assets.Scripts.Objects;
 using System;
 using System.Collections.Generic;
+
+using Assets.Scripts.Objects;
+
 using ImGuiNET;
+
 using UnityEngine;
 
 public class IC10CodeFormatter : ICodeFormatter
@@ -231,7 +234,7 @@ public class IC10CodeFormatter : ICodeFormatter
             {
                 ArgType validFirstType = DataType.Instruction | DataType.Label | DataType.Alias | DataType.Define;
                 isInstructionLine = dt.Has(DataType.Instruction);
-                if(!validFirstType.Has(dt))
+                if (!validFirstType.Has(dt))
                     error = $"Unknown instruction '{txt}'";
             }
 
@@ -282,6 +285,8 @@ public class IC10CodeFormatter : ICodeFormatter
         if (defer || _tokensToUpdate.Count == 0)
             return;
 
+        bool needsUpdate = false;
+
         foreach (var token in _tokensToUpdate)
         {
             int count = 0;
@@ -314,12 +319,15 @@ public class IC10CodeFormatter : ICodeFormatter
 
             if (count > 1)
                 type = DataType.Unknown;
+
+            needsUpdate |= !types.ContainsKey(token) || types[token] != type;
             types[token] = type;
         }
 
         // In an efficient implementation, we would re-parse only affected lines here
-        foreach (IC10Line line in Lines)
-            line.UpdateTokenColors(types, _tokensToUpdate);
+        if (needsUpdate)
+            foreach (IC10Line line in Lines)
+                line.UpdateTokenColors(types, _tokensToUpdate);
 
         _tokensToUpdate.Clear();
     }
@@ -379,9 +387,6 @@ public class IC10CodeFormatter : ICodeFormatter
                 dict[key] = 0;
 
             dict[key]++;
-
-            if (!types.ContainsKey(key) || types[key] != type)
-                UpdateDataType(key);
         }
         else
         {
@@ -396,12 +401,10 @@ public class IC10CodeFormatter : ICodeFormatter
             {
                 dict.Remove(key);
                 types.Remove(key);
-                UpdateDataType(key);
             }
-            else if (types.ContainsKey(key) && types[key] != type)
-                UpdateDataType(key);
-
         }
+
+        UpdateDataType(key);
     }
 
     public override void UpdateAutocomplete()
@@ -409,7 +412,7 @@ public class IC10CodeFormatter : ICodeFormatter
         _autocomplete = null;
         _autocompleteInsertText = null;
 
-        if(!Settings.EnableAutoComplete)
+        if (!Settings.EnableAutoComplete)
             return;
 
         if (Editor.KeyMode != KeyMode.Insert)
@@ -420,7 +423,7 @@ public class IC10CodeFormatter : ICodeFormatter
         if (caret.Col == 0)
             return;
 
-        if(caret.Line >= Lines.Count)
+        if (caret.Line >= Lines.Count)
             return;
 
         if (!Editor.IsWordEnd(caret) && caret.Col < Lines[caret.Line].Length)

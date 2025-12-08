@@ -1,16 +1,18 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+
+using Cysharp.Threading.Tasks;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Cysharp.Threading.Tasks;
+
 using StationeersIC10Editor;
 
 namespace ImGuiEditor.LSP;
@@ -439,9 +441,9 @@ public class LspClient
 
                 tokens.Add(new SemanticToken
                 (
-                    line:prevLine + result.data[i],
+                    line: prevLine + result.data[i],
                     column: prevCol + result.data[i + 1],
-                    length:result.data[i + 2],
+                    length: result.data[i + 2],
                     type: (uint)result.data[i + 3],
                     style: colorMap[result.data[i + 3] % nColors]
                 ));

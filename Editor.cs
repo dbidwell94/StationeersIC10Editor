@@ -1,8 +1,8 @@
 namespace StationeersIC10Editor
 {
     using System;
-    using System.IO;
     using System.Collections.Generic;
+    using System.IO;
     using System.Linq;
 
     using Assets.Scripts;
@@ -391,7 +391,7 @@ namespace StationeersIC10Editor
             if (pos.Col == 0)
                 return false;
 
-            if(pos.Line >= Lines.Count)
+            if (pos.Line >= Lines.Count)
                 return true;
 
             if (pos.Col >= Lines[pos.Line].Length)
@@ -974,7 +974,6 @@ namespace StationeersIC10Editor
 
     public class EditorWindow
     {
-        IEditor Editor;
         public KeyMode KeyMode;
         public static bool UseNativeEditor = false;
         KeyHandler KeyHandler;
@@ -991,7 +990,6 @@ namespace StationeersIC10Editor
         public int CaretCol => ActiveTab.CaretCol;
         public TextPosition CaretPos => ActiveTab.CaretPos;
 
-        public ICodeFormatter CodeFormatter => ActiveTab.CodeFormatter;
         public TextRange Selection => ActiveTab.Selection;
 
         bool LimitExceeded => ActiveTab.LimitExceeded;
@@ -1002,9 +1000,7 @@ namespace StationeersIC10Editor
         public EditorWindow(ProgrammableChipMotherboard pcm)
         {
             KeyHandler = new KeyHandler(this);
-            Editor = new IEditor(KeyHandler, pcm);
-
-            Tabs.Add(Editor);
+            Tabs.Add(new IEditor(KeyHandler, pcm));
         }
 
         private bool Show = false;
@@ -1388,8 +1384,6 @@ namespace StationeersIC10Editor
                     - ImGui.GetStyle().ItemSpacing.x * 3
             );
 
-            bool isIC10 = ActiveTab.CodeFormatter as IC10.IC10CodeFormatter != null;
-
             var formatters = CodeFormatters.FormatterNames;
             var formatter = ActiveTab.CodeFormatter;
 
@@ -1403,7 +1397,7 @@ namespace StationeersIC10Editor
                     {
                         var code = ActiveTab.Code;
                         ActiveTab.CodeFormatter = CodeFormatters.GetFormatter(fmt);
-                        ActiveTab.CodeFormatter.Editor = Editor;
+                        ActiveTab.CodeFormatter.Editor = ActiveTab;
                         ActiveTab.CodeFormatter.ResetCode(code);
                     }
                     if (isSelected)
@@ -1539,7 +1533,7 @@ namespace StationeersIC10Editor
             }
 
             KeyHandler.DrawStatus();
-            CodeFormatter.DrawStatus(ImGui.GetCursorScreenPos());
+            ActiveTab.CodeFormatter.DrawStatus(ImGui.GetCursorScreenPos());
 
             ImGui.PopStyleVar();
         }
@@ -1563,8 +1557,8 @@ namespace StationeersIC10Editor
 
         public unsafe void DrawCodeArea()
         {
-            Editor.Update();
-            CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
+            ActiveTab.Update();
+            ActiveTab.CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
             var padding = ImGui.GetStyle().FramePadding;
             float scrollHeight =
                 ImGui.GetContentRegionAvail().y
@@ -1629,7 +1623,7 @@ namespace StationeersIC10Editor
                 for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
                 {
                     var pos = ImGui.GetCursorScreenPos();
-                    CodeFormatter.DrawLine(i, selection);
+                    ActiveTab.CodeFormatter.DrawLine(i, selection);
 
                     if (i == CaretLine)
                     {
@@ -1653,7 +1647,7 @@ namespace StationeersIC10Editor
             {
                 var completePos = _caretPixelPos + new Vector2(0, 1.5f * LineHeight);
                 ImGui.SetCursorScreenPos(_caretPixelPos);
-                CodeFormatter.DrawAutocomplete(completePos);
+                ActiveTab.CodeFormatter.DrawAutocomplete(completePos);
             }
 
             clipper.End();
@@ -1827,7 +1821,7 @@ namespace StationeersIC10Editor
                 {
                     var pos = GetTextPositionFromMouse(false);
                     if (pos)
-                        CodeFormatter.DrawTooltip(ImGui.GetMousePos());
+                        ActiveTab.CodeFormatter.DrawTooltip(ImGui.GetMousePos());
                 }
                 ImGui.PopFont();
             }

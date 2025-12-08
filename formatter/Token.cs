@@ -42,11 +42,13 @@ namespace StationeersIC10Editor
             IsError = isError;
         }
 
-        public uint Color {
+        public uint Color
+        {
             get => Style.Color;
             set => Style.Color = value;
         }
-        public uint Background {
+        public uint Background
+        {
             get => Style.Background;
             set => Style.Background = value;
         }

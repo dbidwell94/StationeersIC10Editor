@@ -41,7 +41,7 @@ namespace StationeersIC10Editor
             double bestScore = double.MinValue;
             string bestName = null;
 
-            if(string.IsNullOrEmpty(input))
+            if (string.IsNullOrEmpty(input))
                 return GetFormatter();
 
             foreach (var entry in formatters)
