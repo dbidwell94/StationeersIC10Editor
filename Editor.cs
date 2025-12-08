@@ -829,9 +829,8 @@ namespace StationeersIC10Editor
         {
             if (pushUndo)
                 PushUndoState(false);
+            CaretPos = new TextPosition(0, 0);
             CodeFormatter.ResetCode(string.Empty);
-            CaretLine = 0;
-            CaretCol = 0;
             Selection.Reset();
         }
 
