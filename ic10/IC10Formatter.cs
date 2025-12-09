@@ -535,7 +535,7 @@ public class IC10CodeFormatter : ICodeFormatter
                 if (IC10Utils.Registers.Contains(token.Text) && token.Text.StartsWith("r") && token.Text != "ra")
                 {
                     var reg = token.Text;
-                    while (reg.StartsWith("rr") && reg.Length > 3)
+                    while (reg.StartsWith("rr") && reg.Length > 2)
                         reg = reg.Substring(1);
                     if (int.TryParse(reg.Substring(1), out int regNum))
                     {
