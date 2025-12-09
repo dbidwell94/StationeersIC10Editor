@@ -628,8 +628,8 @@ public class IC10OpCode
 // IC10Line updated to work with SemanticToken logic
 public class IC10Line : StyledLine
 {
-    public IC10Line(string text = "")
-        : base(text)
+    public IC10Line()
+        : base()
     {
         // Tokens are populated by IC10CodeFormatter
     }

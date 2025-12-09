@@ -13,7 +13,7 @@ using ImGuiNET;
 
 using UnityEngine;
 
-public class IC10CodeFormatter : ICodeFormatter
+public class IC10CodeFormatter : StaticFormatter
 {
     private Dictionary<string, DataType> types = new Dictionary<string, DataType>();
     private Dictionary<string, int> defines = new Dictionary<string, int>();
@@ -38,7 +38,11 @@ public class IC10CodeFormatter : ICodeFormatter
         return 1.0 * score / lines.Length;
     }
 
-    public IC10CodeFormatter() : base()
+    public IC10CodeFormatter() : base(
+           TokenSeparators: " \t",
+           StringDelimiters: "\"",
+           CommentPrefix: "#",
+           KeepWhitespaces: false)
     {
         OnCodeChanged += () =>
         {
@@ -131,45 +135,15 @@ public class IC10CodeFormatter : ICodeFormatter
 
     public override StyledLine ParseLine(string text)
     {
-        if (text == null)
-            text = string.Empty;
-        var line = new IC10Line(text);
-
-        string processingText = text;
-        int commentIndex = text.IndexOf('#');
-        int i = 0;
-        if (commentIndex >= 0)
-            processingText = text.Substring(0, commentIndex);
-
-        while (i < processingText.Length)
-        {
-            int start = FindNextNonWhitespace(processingText, i);
-            int end = FindNextWhitespace(processingText, start);
-            if (start >= processingText.Length)
-                break;
-
-            string tokenText = processingText.Substring(start, end - start);
-
-            var st = new Token(start, tokenText);
-            line.Add(st);
-
-            i = end;
-        }
+        var line = TParseLine<IC10Line>(text);
+        // var ic10Line = new IC10Line(text);
+        // ic10Line.Clear();
+        // foreach (var token in line)
+        //     if (!string.IsNullOrWhiteSpace(token.Text))
+        //         ic10Line.Add(token);
 
         IdentifyTypesAndAddTokens(line);
         line.UpdateTokenColors(types);
-        if (commentIndex >= 0)
-        {
-            line.Add(
-                new Token(
-                    commentIndex,
-                    text.Substring(commentIndex),
-                    ColorComment,
-                    (uint)DataType.Comment
-                )
-            );
-        }
-
         return line;
     }
 
@@ -250,7 +224,7 @@ public class IC10CodeFormatter : ICodeFormatter
                     if (!compat.Has(dt))
                     {
                         error =
-                            $"Invalid argument type {dt}, expected {expected.Description}";
+                            $"Invalid argument type {dt.Description}, expected {expected.Description}";
                         dt = DataType.Unknown;
                     }
 

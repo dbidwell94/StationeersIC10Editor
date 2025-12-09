@@ -25,11 +25,42 @@ public struct Style
         Background = background;
     }
 
+    public Style(string htmlColor, string htmlBackground = null)
+    {
+        Color = ICodeFormatter.ColorFromHTML(htmlColor);
+        Background = htmlBackground != null ? ICodeFormatter.ColorFromHTML(htmlBackground) : 0;
+    }
+
     public static implicit operator Style(uint color)
     {
         return new Style(color, 0);
     }
 
+}
+
+public class Theme
+{
+    public Style Default = new Style("#ffffff");
+    public Style Keyword = new Style("#569CD6");
+    public Style Control = new Style("#C586C0");
+    public Style Identifier = new Style("#9CDCFE");
+    public Style Comment = new Style("#808080");
+    public Style NumberLiteral = new Style("#B5CEA8");
+    public Style StringLiteral = new Style("#CE9178");
+    public Style Operator = new Style("#D4D4D4");
+    public Style Punctuation = new Style("#D4D4D4");
+    public Style FunctionName = new Style("#DCDCAA");
+    public Style ClassName = new Style("#4EC9B0");
+    public Style Error = new Style("#ff0000");
+    public Style PropertyName = new Style("#9CDCFE");
+    public Style Constant = new Style("#569CD6");
+    public Style Namespace = new Style("#4EC9B0");
+    public Style Modifier = new Style("#C586C0");
+    public Style TypeName = new Style("#4EC9B0");
+
+    public Theme() { }
+
+    public static Theme DefaultTheme = new Theme();
 }
 
 public class Token
@@ -67,6 +98,11 @@ public class StyledLine : List<Token>
     }
 
     public int Length => _content.Length;
+
+    public StyledLine() : base()
+    {
+        _content = string.Empty;
+    }
 
     public StyledLine(string text, List<SemanticToken> tokens = null)
         : base()
