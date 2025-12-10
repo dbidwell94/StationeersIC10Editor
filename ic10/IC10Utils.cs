@@ -640,7 +640,7 @@ public class IC10Line : StyledLine
         IsAlias && (GetDataType(2) == DataType.Number || GetDataType(2) == DataType.Register);
     public bool IsDevAlias => IsAlias && GetDataType(2) == DataType.Device;
     public bool IsDefine =>
-        Count == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
+        NumCodeTokens == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
     public bool IsInstruction => Count > 0 && GetDataType(0) == DataType.Instruction;
 
     // Counts actual semantic tokens (excluding whitespace/comments if they are treated as tokens,
