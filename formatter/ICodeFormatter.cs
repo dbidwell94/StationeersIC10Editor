@@ -2,6 +2,9 @@ namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Text;
 
 using ImGuiNET;
 
@@ -544,6 +547,38 @@ public abstract class ICodeFormatter
             var list = ImGui.GetWindowDrawList();
             list.AddRectFilled(pos, pos + completeSize, ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.9f)), 5.0f);
             _autocomplete.Draw(pos + ImGui.GetStyle().WindowPadding);
+        }
+    }
+
+    public static string EncodeSource(string source)
+    {
+        if (string.IsNullOrEmpty(source))
+            return "";
+
+        byte[] bytes = Encoding.UTF8.GetBytes(source);
+
+        using (var memoryStream = new MemoryStream())
+        {
+            using (var gzipStream = new GZipStream(memoryStream, CompressionMode.Compress))
+                gzipStream.Write(bytes, 0, bytes.Length);
+            return Convert.ToBase64String(memoryStream.ToArray());
+        }
+    }
+
+    public static string DecodeSource(string source)
+    {
+        if (string.IsNullOrEmpty(source))
+            return "";
+
+        byte[] compressedBytes = Convert.FromBase64String(source);
+
+        using (var memoryStream = new MemoryStream(compressedBytes))
+        using (var gzipStream = new GZipStream(memoryStream, CompressionMode.Decompress))
+        using (var outputStream = new MemoryStream())
+        {
+            gzipStream.CopyTo(outputStream);
+
+            return Encoding.UTF8.GetString(outputStream.ToArray());
         }
     }
 }
