@@ -634,14 +634,14 @@ public class IC10Line : StyledLine
         // Tokens are populated by IC10CodeFormatter
     }
 
-    public bool IsLabel => Count == 1 && GetDataType(0) == DataType.Label;
-    public bool IsAlias => Count == 3 && GetDataType(0) == DataType.Alias;
+    public bool IsLabel => NumCodeTokens == 1 && GetDataType(0) == DataType.Label;
+    public bool IsAlias => NumCodeTokens == 3 && GetDataType(0) == DataType.Alias;
     public bool IsNumAlias =>
         IsAlias && (GetDataType(2) == DataType.Number || GetDataType(2) == DataType.Register);
     public bool IsDevAlias => IsAlias && GetDataType(2) == DataType.Device;
     public bool IsDefine =>
         NumCodeTokens == 3 && GetDataType(0) == DataType.Define && GetDataType(2) == DataType.Number;
-    public bool IsInstruction => Count > 0 && GetDataType(0) == DataType.Instruction;
+    public bool IsInstruction => NumCodeTokens > 0 && GetDataType(0) == DataType.Instruction;
 
     // Counts actual semantic tokens (excluding whitespace/comments if they are treated as tokens,
     // but in SemanticToken model, everything interesting is a token.
