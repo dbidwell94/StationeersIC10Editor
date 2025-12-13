@@ -123,9 +123,11 @@ namespace StationeersIC10Editor
 
                 CodeFormatters.RegisterFormatter("Plain", typeof(PlainTextFormatter));
                 CodeFormatters.RegisterFormatter("IC10", typeof(IC10.IC10CodeFormatter), true);
-                CodeFormatters.RegisterFormatter("Python", typeof(PythonFormatter));
+                CodeFormatters.RegisterFormatter("PythonStatic", typeof(PythonFormatter));
                 CodeFormatters.RegisterFormatter("C#", typeof(CSharpFormatter));
                 // CodeFormatters.RegisterFormatter("LSP", typeof(ImGuiEditor.LSP.LSPFormatter));
+                // CodeFormatters.RegisterFormatter("LSP", typeof(ImGuiEditor.LSP.LSPFormatter));
+                CodeFormatters.RegisterFormatter("Python", typeof(ImGuiEditor.LSP.LSPFormatter));
             }
             catch (Exception ex)
             {

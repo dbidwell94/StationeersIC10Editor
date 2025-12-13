@@ -68,35 +68,36 @@ public class LspClient
 
             initializationOptions = new { },
 
-            capabilities = new
-            {
-                workspace = new
-                {
-                    workspaceFolders = true
-                },
-                textDocument = new
-                {
-                    synchronization = new
-                    {
-                        didSave = true,
-                        willSave = false,
-                        willSaveWaitUntil = false,
-                        dynamicRegistration = false
-                    },
-                    completion = new
-                    {
-                        completionItem = new
-                        {
-                            snippetSupport = false
-                        }
-                    },
-                    publishDiagnostics = new
-                    {
-                        relatedInformation = true,
-                        versionSupport = true
-                    }
-                }
-            },
+            capabilities = new{},
+            // {
+            //     workspace = new
+            //     {
+            //         workspaceFolders = true
+            //     },
+            //     textDocument = new
+            //     {
+            //         synchronization = new
+            //         {
+            //             didSave = true,
+            //             willSave = false,
+            //             willSaveWaitUntil = false,
+            //             dynamicRegistration = false
+            //         },
+            //         completion = new
+            //         {
+            //             completionItem = new
+            //             {
+            //                 snippetSupport = false
+            //             }
+            //         },
+            //         publishDiagnostics = new
+            //         {
+            //             relatedInformation = true,
+            //             dataSupport = true,
+            //             versionSupport = true
+            //         }
+            //     }
+            // },
 
             workspaceFolders = new[]
     {
@@ -475,25 +476,27 @@ public class LspClient
 
     public static LspClient StartPyrightLSPServer()
     {
-        string SiteDir = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "site-packages");
-        string NodeExe = Path.Combine(SiteDir, "nodejs_wheel", "node.exe");
-        string PyRightJS = Path.Combine(SiteDir, "basedpyright", "langserver.index.js");
-        string Args = "--no-warnings --title \"abc\" langserver.index.js --stdio";
+        string workingDir = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv");
+        string PyRightExe = Path.Combine(workingDir, "Scripts", "basedpyright-langserver.exe");
+        // string NodeExe = Path.Combine(SiteDir, "nodejs_wheel", "node.exe");
+        // string PyRightJS = Path.Combine(SiteDir, "basedpyright", "langserver.index.js");
+        string Args = "--no-warnings --title \"abc\" --stdio";
+        // string Args = "--stdio";
         var startInfo = new ProcessStartInfo
         {
-            FileName = NodeExe,
+            FileName = PyRightExe,
             Arguments = Args,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(PyRightJS)
+            WorkingDirectory = workingDir
         };
 
-        startInfo.EnvironmentVariables["UV_THREADPOOL_SIZE"] = "1";
-        startInfo.EnvironmentVariables["NODE_DISABLE_COLORS"] = "1";
-        startInfo.EnvironmentVariables["UV_PROCESS_TITLE"] = "0";
+        // startInfo.EnvironmentVariables["UV_THREADPOOL_SIZE"] = "1";
+        // startInfo.EnvironmentVariables["NODE_DISABLE_COLORS"] = "1";
+        // startInfo.EnvironmentVariables["UV_PROCESS_TITLE"] = "0";
 
         return new LspClientStdio(startInfo);
     }
@@ -513,11 +516,16 @@ class LspClientStdio : LspClient, IDisposable
             EnableRaisingEvents = true
         };
 
+        L.Info("Starting LSP server process...");
+        L.Info($"Executable: {_process.StartInfo.FileName}");
+        L.Info($"Arguments: {_process.StartInfo.Arguments}");
+
         if (!_process.Start())
         {
             L.Info("Failed to start LSP server process.");
             throw new InvalidOperationException("Failed to start LSP server process.");
         }
+
 
         // check if it dies within a second
         _process.WaitForExit(1000);
