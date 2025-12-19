@@ -793,7 +793,7 @@ namespace StationeersIC10Editor
                 {
                     // Merge with next line
                     CurrentLine = CurrentLine + Editor.Lines[CaretLine + 1].Text;
-                    Editor.RemoveLine(CaretLine);
+                    Editor.RemoveLine(CaretLine+1);
                 }
             }
 

@@ -4,120 +4,120 @@ namespace StationeersIC10Editor;
 
 public class CSharpFormatter : StaticFormatter
 {
-    static readonly Dictionary<string, Style> CSharpKeywords = new()
+    static readonly Dictionary<string, uint> CSharpKeywords = new()
     {
         //
         // CONTROL FLOW
         //
-        { "if",       Theme.DefaultTheme.Keyword },
-        { "else",     Theme.DefaultTheme.Keyword },
-        { "switch",   Theme.DefaultTheme.Keyword },
-        { "case",     Theme.DefaultTheme.Keyword },
-        { "default",  Theme.DefaultTheme.Keyword },
-        { "for",      Theme.DefaultTheme.Keyword },
-        { "foreach",  Theme.DefaultTheme.Keyword },
-        { "while",    Theme.DefaultTheme.Keyword },
-        { "do",       Theme.DefaultTheme.Keyword },
-        { "break",    Theme.DefaultTheme.Keyword },
-        { "continue", Theme.DefaultTheme.Keyword },
-        { "return",   Theme.DefaultTheme.Keyword },
-        { "goto",     Theme.DefaultTheme.Keyword },
-        { "yield",    Theme.DefaultTheme.Keyword },
+        { "if",       15},
+        { "else",     15},
+        { "switch",   15},
+        { "case",     15 },
+        { "default",  15 },
+        { "for",      15 },
+        { "foreach",  15 },
+        { "while",    15 },
+        { "do",       15 },
+        { "break",    15 },
+        { "continue", 15 },
+        { "return",   15 },
+        { "goto",     15 },
+        { "yield",    15 },
 
         //
         // DECLARATIONS
         //
-        { "class",     Theme.DefaultTheme.Keyword },
-        { "struct",    Theme.DefaultTheme.Keyword },
-        { "interface", Theme.DefaultTheme.Keyword },
-        { "enum",      Theme.DefaultTheme.Keyword },
-        { "namespace", Theme.DefaultTheme.Namespace },
-        { "using",     Theme.DefaultTheme.Namespace },
+        { "class",     15 },
+        { "struct",    15 },
+        { "interface", 15 },
+        { "enum",      15 },
+        { "namespace", 0 },
+        { "using",     0 },
 
         //
         // MODIFIERS
         //
-        { "public",     Theme.DefaultTheme.Modifier },
-        { "private",    Theme.DefaultTheme.Modifier },
-        { "protected",  Theme.DefaultTheme.Modifier },
-        { "internal",   Theme.DefaultTheme.Modifier },
-        { "static",     Theme.DefaultTheme.Modifier },
-        { "readonly",   Theme.DefaultTheme.Modifier },
-        { "const",      Theme.DefaultTheme.Modifier },
-        { "virtual",    Theme.DefaultTheme.Modifier },
-        { "override",   Theme.DefaultTheme.Modifier },
-        { "abstract",   Theme.DefaultTheme.Modifier },
-        { "sealed",     Theme.DefaultTheme.Modifier },
-        { "partial",    Theme.DefaultTheme.Modifier },
-        { "async",      Theme.DefaultTheme.Modifier },
-        { "unsafe",     Theme.DefaultTheme.Modifier },
-        { "extern",     Theme.DefaultTheme.Modifier },
-        { "volatile",   Theme.DefaultTheme.Modifier },
+        { "public",     16 },
+        { "private",    16 },
+        { "protected",  16 },
+        { "internal",   16 },
+        { "static",     16 },
+        { "readonly",   16 },
+        { "const",      16 },
+        { "virtual",    16 },
+        { "override",   16 },
+        { "abstract",   16 },
+        { "sealed",     16 },
+        { "partial",    16 },
+        { "async",      16 },
+        { "unsafe",     16 },
+        { "extern",     16 },
+        { "volatile",   16 },
 
         //
         // TYPES
         //
-        { "void",       Theme.DefaultTheme.TypeName },
-        { "object",     Theme.DefaultTheme.TypeName },
-        { "string",     Theme.DefaultTheme.TypeName },
-        { "bool",       Theme.DefaultTheme.TypeName },
-        { "byte",       Theme.DefaultTheme.TypeName },
-        { "sbyte",      Theme.DefaultTheme.TypeName },
-        { "short",      Theme.DefaultTheme.TypeName },
-        { "ushort",     Theme.DefaultTheme.TypeName },
-        { "int",        Theme.DefaultTheme.TypeName },
-        { "uint",       Theme.DefaultTheme.TypeName },
-        { "long",       Theme.DefaultTheme.TypeName },
-        { "ulong",      Theme.DefaultTheme.TypeName },
-        { "float",      Theme.DefaultTheme.TypeName },
-        { "double",     Theme.DefaultTheme.TypeName },
-        { "decimal",    Theme.DefaultTheme.TypeName },
-        { "char",       Theme.DefaultTheme.TypeName },
+        { "void",       1 },
+        { "object",     1 },
+        { "string",     1 },
+        { "bool",       1 },
+        { "byte",       1 },
+        { "sbyte",      1 },
+        { "short",      1 },
+        { "ushort",     1 },
+        { "int",        1 },
+        { "uint",       1 },
+        { "long",       1 },
+        { "ulong",      1 },
+        { "float",      1 },
+        { "double",     1 },
+        { "decimal",    1 },
+        { "char",       1 },
 
         //
         // CONTEXTUAL KEYWORDS
         //
-        { "var",         Theme.DefaultTheme.Keyword },
-        { "dynamic",     Theme.DefaultTheme.Keyword },
-        { "await",       Theme.DefaultTheme.Keyword },
-        { "nameof",      Theme.DefaultTheme.Keyword },
-        { "checked",     Theme.DefaultTheme.Keyword },
-        { "unchecked",   Theme.DefaultTheme.Keyword },
-        { "lock",        Theme.DefaultTheme.Keyword },
-        { "base",        Theme.DefaultTheme.Keyword },
-        { "this",        Theme.DefaultTheme.Keyword },
-        { "new",         Theme.DefaultTheme.Keyword },
-        { "typeof",      Theme.DefaultTheme.Keyword },
-        { "sizeof",      Theme.DefaultTheme.Keyword },
-        { "stackalloc",  Theme.DefaultTheme.Keyword },
-        { "ref",         Theme.DefaultTheme.Keyword },
-        { "out",         Theme.DefaultTheme.Keyword },
-        { "in",          Theme.DefaultTheme.Keyword },
+        { "var",         15 },
+        { "dynamic",     15 },
+        { "await",       15 },
+        { "nameof",      15 },
+        { "checked",     15 },
+        { "unchecked",   15 },
+        { "lock",        15 },
+        { "base",        15 },
+        { "this",        15 },
+        { "new",         15 },
+        { "typeof",      15 },
+        { "sizeof",      15 },
+        { "stackalloc",  15 },
+        { "ref",         15 },
+        { "out",         15 },
+        { "in",          15 },
 
         //
         // SPECIAL VALUES
         //
-        { "true",   Theme.DefaultTheme.Constant },
-        { "false",  Theme.DefaultTheme.Constant },
-        { "null",   Theme.DefaultTheme.Constant },
+        { "true",   19},
+        { "false",  19},
+        { "null",   19},
 
         //
         // EXCEPTIONS & ERROR HANDLING
         //
-        { "try",       Theme.DefaultTheme.Keyword },
-        { "catch",     Theme.DefaultTheme.Keyword },
-        { "finally",   Theme.DefaultTheme.Keyword },
-        { "throw",     Theme.DefaultTheme.Keyword },
+        { "try",       15 },
+        { "catch",     15 },
+        { "finally",   15 },
+        { "throw",     15 },
 
         //
         // OTHER LANGUAGE FEATURES
         //
-        { "is",     Theme.DefaultTheme.Keyword },
-        { "as",     Theme.DefaultTheme.Keyword },
-        { "operator", Theme.DefaultTheme.Keyword },
-        { "delegate", Theme.DefaultTheme.Keyword },
-        { "event",    Theme.DefaultTheme.Keyword },
-        { "params",   Theme.DefaultTheme.Keyword },
+        { "is",     15 },
+        { "as",     15 },
+        { "operator", 15 },
+        { "delegate", 15 },
+        { "event",    15 },
+        { "params",   15 },
     };
 
     public CSharpFormatter()

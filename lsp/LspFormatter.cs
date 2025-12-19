@@ -25,6 +25,7 @@ public class LSPFormatter : ICodeFormatter
     }
 
     public LSPFormatter()
+    // public LSPFormatter(LspClient lspClient)
     {
         Identifier = new VersionedTextDocumentIdentifier
         {
@@ -38,6 +39,7 @@ public class LSPFormatter : ICodeFormatter
 
         // LspClient = LspClient.StartPyrightLSPServer();
         LspClient = new LspClientSocket("localhost", 9222);
+        // LspClient = lspClient;
         LspClient.OnInfo += (msg) => L.Debug($"[LSP] {msg}");
         LspClient.OnError += (msg) => L.Debug($"[LSP] {msg}");
         LspClient.OnDiagnostics += UpdateDiagnostics;
@@ -157,7 +159,7 @@ public class LSPFormatter : ICodeFormatter
 
         L.Debug($"Received {completions.Count} completions from LSP");
         StyledText items = new StyledText();
-        var colorMap = LSPUtils.ColorMap;
+        var colorMap = LSPUtils.CompletionColorMap;
         foreach (var item in completions)
         {
             if (commonPrefix == null)
@@ -260,14 +262,11 @@ public class LSPFormatter : ICodeFormatter
     public override void InsertLine(int index, string line)
     {
         IncrementVersion();
+        var pos = new Position { line = index - 1, character = Lines[index - 1].Text.Length };
         _changes.Add(new TextDocumentContentChangeEvent
         {
-            range = new Range
-            {
-                start = new Position { line = index, character = 0 },
-                end = new Position { line = index, character = 0 }
-            },
-            text = line + "\n"
+            range = new Range { start = pos, end = pos },
+            text = "\n" + line
         });
         Lines.Insert(index, ParseLine(line));
     }

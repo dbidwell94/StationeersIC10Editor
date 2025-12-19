@@ -7,15 +7,15 @@ public class StaticFormatter : ICodeFormatter
     protected HashSet<char> TokenSeparators = null;
     protected HashSet<char> StringDelimiters = null;
     protected string CommentPrefix;
-    protected Dictionary<string, Style> Keywords = null;
+    protected Dictionary<string, uint> Keywords = null;
     protected bool KeepWhitespaces = true;
 
-    public StaticFormatter(string TokenSeparators, string StringDelimiters, string CommentPrefix, Dictionary<string, Style> Keywords = null, bool KeepWhitespaces = true)
+    public StaticFormatter(string TokenSeparators, string StringDelimiters, string CommentPrefix, Dictionary<string, uint> Keywords = null, bool KeepWhitespaces = true)
     {
         this.TokenSeparators = new HashSet<char>(TokenSeparators.ToCharArray());
         this.StringDelimiters = new HashSet<char>(StringDelimiters.ToCharArray());
         this.CommentPrefix = CommentPrefix;
-        this.Keywords = Keywords == null ? new Dictionary<string, Style>() : Keywords;
+        this.Keywords = Keywords == null ? new Dictionary<string, uint>() : Keywords;
         this.KeepWhitespaces = KeepWhitespaces;
     }
 
@@ -58,9 +58,9 @@ public class StaticFormatter : ICodeFormatter
 
             if (!string.IsNullOrWhiteSpace(t) || KeepWhitespaces)
             {
-                var token = new Token(start, t, Theme.DefaultTheme.Default);
+                var token = new Token(start, t, ICodeFormatter.ColorDefault);
                 if (StringDelimiters.Contains(t[0]) && t.Length >= 2 && t[t.Length - 1] == t[0])
-                    token.Style = Theme.DefaultTheme.StringLiteral;
+                    token.Style = LSPUtils.ColorMap[18]; // String color
                 tokens.Add(token);
             }
         };
@@ -100,7 +100,7 @@ public class StaticFormatter : ICodeFormatter
             if (token.Text.StartsWith(CommentPrefix))
                 token.Style = new Style { Color = ICodeFormatter.ColorComment };
             else if (Keywords.ContainsKey(token.Text))
-                token.Style = Keywords[token.Text];
+                token.Style = LSPUtils.ColorMap[Keywords[token.Text]];
         }
         styledLine.AddRange(tokens);
 
