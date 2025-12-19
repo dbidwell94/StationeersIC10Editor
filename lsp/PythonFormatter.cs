@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace StationeersIC10Editor;
 
-public class PythonFormatter : StaticFormatter
+public class PythonStaticFormatter : StaticFormatter
 {
     static readonly Dictionary<string, Style> PythonKeywords = new()
     {
@@ -48,7 +48,7 @@ public class PythonFormatter : StaticFormatter
         { "continue", Theme.DefaultTheme.Control },
     };
 
-    public PythonFormatter()
+    public PythonStaticFormatter()
         : base(
             TokenSeparators: " \t()[]{}:.,+-*/%=<>!&|^~",
             StringDelimiters: "\"\'",

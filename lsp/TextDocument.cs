@@ -37,6 +37,15 @@ public class Range
 
 public class Position
 {
+    public Position()
+    {
+        line = 0;
+        character = 0;
+    }
+    public Position(StationeersIC10Editor.TextPosition p) {
+        line = p.Line;
+        character = p.Col;
+    }
     public int line { get; set; }
     public int character { get; set; }
 }
@@ -90,4 +99,45 @@ public class PublishDiagnosticsParams
 public class DocumentDiagnosticParams
 {
     public TextDocumentIdentifier textDocument { get; set; } = new();
+}
+
+public class Documentation
+{
+    public string kind { get; set; } = string.Empty;
+    public string value { get; set; } = string.Empty;
+}
+
+public class CompletionItem
+{
+    public string label { get; set; } = string.Empty;
+    public int kind { get; set; }
+    public string detail { get; set; } = string.Empty;
+    public string sortText { get; set; } = string.Empty;
+    public Documentation documentation { get; set; } = new();
+}
+
+public class CompletionList
+{
+    public bool isIncomplete { get; set; }
+    public CompletionItem[] items { get; set; } = [];
+}
+
+public class ParameterInformation
+{
+    public string label { get; set; } = string.Empty;
+    public Documentation documentation { get; set; } = new();
+}
+
+public class SignatureHelp
+{
+    public string label { get; set; } = string.Empty;
+    public Documentation documentation { get; set; } = new();
+    public ParameterInformation[] parameters { get; set; } = [];
+}
+
+public class SignatureHelpList
+{
+    public SignatureHelp[] signatures { get; set; } = [];
+    public int activeSignature { get; set; }
+    public int activeParameter { get; set; }
 }

@@ -9,6 +9,7 @@ public class LSPFormatter : ICodeFormatter
     protected VersionedTextDocumentIdentifier Identifier;
     protected LspClient LspClient;
     protected List<TextDocumentContentChangeEvent> _changes = new List<TextDocumentContentChangeEvent>();
+    protected PythonStaticFormatter StaticFormatter = new PythonStaticFormatter();
 
     protected bool _isOpen = false;
 
@@ -27,17 +28,20 @@ public class LSPFormatter : ICodeFormatter
     {
         Identifier = new VersionedTextDocumentIdentifier
         {
-            uri = "cache/livemod/Main.cs",
+            // uri = new Uri(Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "ws", "a.py")).AbsoluteUri,
+            // uri = "a.py",
+            uri = "memory://file",
             version = 1
         };
 
-        OnCodeChanged += SubmitChanges;
+        OnCodeChanged = (Action)Delegate.Combine(SubmitChanges, OnCodeChanged);
 
-        LspClient = LspClient.StartPyrightLSPServer();
-        // LspClient = new LspClientSocket("localhost", 9222);
-        LspClient.OnInfo += (msg) => L.Info($"[LSP] {msg}");
-        LspClient.OnError += (msg) => L.Error($"[LSP] {msg}");
+        // LspClient = LspClient.StartPyrightLSPServer();
+        LspClient = new LspClientSocket("localhost", 9222);
+        LspClient.OnInfo += (msg) => L.Debug($"[LSP] {msg}");
+        LspClient.OnError += (msg) => L.Debug($"[LSP] {msg}");
         LspClient.OnDiagnostics += UpdateDiagnostics;
+        LspClient.OnInitialized += () => { SubmitChanges(); };
     }
 
     public int IncrementVersion()
@@ -48,17 +52,10 @@ public class LSPFormatter : ICodeFormatter
 
     public void UpdateDiagnostics(PublishDiagnosticsParams p)
     {
-        L.Info($"Received diagnostics for {p.textDocument.uri}, {p.diagnostics.Length} items");
-        // if (p.textDocument.uri != Identifier.uri)
-        //     return;
-
         foreach (var diag in p.diagnostics)
         {
-            L.Info($"Diagnostic: {diag.message} at {diag.range.start.line},{diag.range.start.character} severity {diag.severity}");
-            // if (diag.severity > 1)
-            //     continue;
-
-            L.Info($"Processing error diagnostic at {diag.range.start.line},{diag.range.start.character}: {diag.message}");
+            if (diag.severity > 1)
+                continue;
 
             var start = diag.range.start;
             var end = diag.range.end;
@@ -69,24 +66,16 @@ public class LSPFormatter : ICodeFormatter
                 length = Lines[line].Text.Length - start.character;
             if (line < Lines.Count)
             {
-                // Lines[line].Version = Identifier.version;
-                L.Info($"Locating token at {line},{column}");
                 var token = Lines[line].GetTokenAt(column);
                 if (token == null)
+                    token = Lines[line].GetTokenAt(column - 1);
+
+                if (token == null)
                 {
-                    L.Info($"ERROR: No token Adding error token at {line},{column}: {diag.message}");
-                    // Lines[line].AddToken(new SemanticToken(
-                    //     line,
-                    //     column,
-                    //     length,
-                    //     0,
-                    //     data: diag.message,
-                    //     isError: true
-                    // ));
+                    L.Debug($"ERROR: No token Adding error token at {line},{column}: {diag.message}");
                 }
                 else
                 {
-                    L.Info($"Setting error on existing token at {line},{column}: {diag.message}");
                     token.Error = StyledText.ErrorText(diag.message);
                     token.Style.Color = ICodeFormatter.ColorError;
                 }
@@ -96,178 +85,144 @@ public class LSPFormatter : ICodeFormatter
 
     public void SubmitChanges()
     {
-        L.Info("Code changed, submitting changes to LSP");
+        L.Debug("Code changed, submitting changes to LSP");
         if (LspClient != null && _changes.Count > 0 && LspClient.IsInitialized)
         {
-            L.Info($"Submitting {_changes.Count} changes to LSP (version {Identifier.version})");
+            L.Debug($"Submitting {_changes.Count} changes to LSP (version {Identifier.version})");
             if (!_isOpen)
             {
-                L.Info("Opening document in LSP");
-                LspClient.OpenDocument(Identifier.uri, "csharp", Editor.Code);
+                L.Debug("Opening document in LSP");
+                LspClient.OpenDocument(Identifier.uri, "python", Editor.Code);
                 _isOpen = true;
             }
             else
             {
-                L.Info("Sending changes to LSP");
+                L.Debug("Sending changes to LSP");
                 LspClient.ChangeDocument(Identifier, _changes.ToArray());
-                // LspClient.ChangeDocumentFull(Identifier, Editor.Code);
             }
 
-            L.Info("Changes submitted, request tokens");
+            L.Debug("Changes submitted, request tokens");
             // request semantic tokens update
             UpdateTokens();
             _changes.Clear();
         }
     }
 
+    public override void UpdateAutocomplete()
+    {
+        _autocomplete = null;
+        _autocompleteInsertText = null;
+        UpdateAutocompleteAsync();
+    }
+
+    public async void UpdateAutocompleteAsync()
+    {
+        int versionBefore = Version;
+        var p = new TextPosition(Editor.CaretLine, Editor.CaretCol - 1);
+        var currentWord = "";
+        if (p.Col < 0)
+            p.Col = 0;
+        else if (Editor[p] != '.')
+            currentWord = Editor.GetCode(Editor.GetWordAt(p));
+
+        if (Editor[p] == '(' || Editor[p] == ',')
+        {
+            L.Debug($"Requesting signature help at {p.Line},{p.Col}");
+            var signatureHelps = await LspClient.RequestSignatureHelp(Identifier.uri, new Position(Editor.CaretPos));
+
+            if (signatureHelps != null && signatureHelps.Count > 0)
+            {
+                var text = new StyledText();
+                var signatureHelp = signatureHelps[0];
+                text.AddWrapped(signatureHelp.label, 60, new Style());
+                text.AddWrapped(signatureHelp.documentation.value, 60, new Style());
+                _autocomplete = text;
+                return;
+            }
+        }
+
+        L.Debug($"Requesting completions at {p.Line},{p.Col} for current word '{currentWord}'");
+
+        var completions = await LspClient.RequestCompletions(Identifier.uri, new Position(Editor.CaretPos));
+        if (versionBefore != Version || completions == null || completions.Count == 0)
+            return;
+
+        completions.RemoveAll(item => !item.label.StartsWith(currentWord) || item.label.StartsWith("_"));
+        if (completions.Count == 0)
+            return;
+
+        completions.Sort((a, b) => { return a.sortText.CompareTo(b.sortText); });
+
+        string commonPrefix = null;
+
+        L.Debug($"Received {completions.Count} completions from LSP");
+        StyledText items = new StyledText();
+        var colorMap = LSPUtils.ColorMap;
+        foreach (var item in completions)
+        {
+            if (commonPrefix == null)
+                commonPrefix = item.label;
+            else
+            {
+                int minLength = Math.Min(commonPrefix.Length, item.label.Length);
+                int i = 0;
+                for (; i < minLength; i++)
+                    if (commonPrefix[i] != item.label[i])
+                        break;
+                commonPrefix = commonPrefix.Substring(0, i);
+            }
+            var sline = new StyledLine(item.label);
+            sline.Add(new Token(0, item.label, colorMap[(int)item.kind]));
+            items.Add(sline); //new StyledLine($"{item.label}, kind: {item.kind}, detail: {item.detail}"));
+            if (items.Count >= 20)
+            {
+                items.Add(new StyledLine($"... and {completions.Count - items.Count} more"));
+                break;
+            }
+        }
+        L.Debug($"Common prefix: '{commonPrefix}'");
+        if (items.Count > 0 && (items.Count > 1 || items[0].Text != currentWord))
+        {
+            _autocomplete = items;
+            _autocompleteInsertText = commonPrefix != null && commonPrefix.Length > currentWord.Length ? commonPrefix.Substring(currentWord.Length) : null;
+        }
+    }
+
     public async void UpdateTokens()
     {
         var tokens = await LspClient.RequestSemanticTokens(Identifier.uri);
-        L.Info($"Received {tokens.Count} semantic tokens from LSP");
+        L.Debug($"Received {tokens.Count} semantic tokens from LSP");
 
-        // for (var i = 0; i < Lines.Count; i++)
-        // {
-        //     Lines[i].Clear();
-        // }
-        //
         for (var i = 0; i < tokens.Count; i++)
         {
             var semToken = tokens[i];
             var line = semToken.Line;
-            if( line < Lines.Count)
+            if (line < Lines.Count)
             {
                 var token = Lines[line].GetTokenAt(semToken.Column);
                 if (token != null)
-                {
-                    L.Info($"Updating token at {line},{semToken.Column} with type {semToken.Type}");
                     token.Style.Color = semToken.Style.Color;
-                    // token.Style.Background = semToken.Style.Background;
-                }
                 else
-                {
-                    L.Info($"No token found at {line},{semToken.Column} to update");
-                }
+                    L.Debug($"No token found at {line},{semToken.Column} to update");
 
             }
-            // var token = tokens[i];
-            // if (token.Line < Lines.Count)
-                // Lines[token.Line].Tokens.Add(token);
         }
 
         // var pos = _lastCaretPos;
-
-        // // var hover = await LspClient.SendRequestAsync("textDocument/hover",
-        // //         new
-        // //         {
-        // //             textDocument = new { uri = Identifier.uri },
-        // //             position = new { line = pos.Line, character = pos.Col }
-        // //         });
-        // // L.Info($"Hover info at {pos.Line},{pos.Col}: {hover}");
-        // // var diag = await LspClient.RequestDiagnostics(Identifier);
-        // // L.Info($"Received {diag} diagnostics from manual request");
+        // var hover = await LspClient.SendRequestAsync("textDocument/hover",
+        //         new
+        //         {
+        //             textDocument = new { uri = Identifier.uri },
+        //             position = new { line = pos.Line, character = pos.Col }
+        //         });
+        // L.Debug($"Hover info at {pos.Line},{pos.Col}: {hover}");
+        // var diag = await LspClient.RequestDiagnostics(Identifier);
+        // L.Debug($"Received {diag} diagnostics from manual request");
     }
-
-    protected static HashSet<char> splitSet = new HashSet<char>(new char[] { ' ', '\t', '(', ')', ':', '.', ',', ';', '+', '-', '*', '/', '=', '<', '>', '!', '[', ']', '{', '}' });
-    protected static Dictionary<string, uint> keywordColors = new Dictionary<string, uint>
-    {
-        { "def", 0xFF569CD6 },
-        { "class", 0xFF569CD6 },
-        { "import", 0xFF569CD6 },
-        { "from", 0xFF569CD6 },
-        { "if", 0xFFC586C0 },
-        { "else", 0xFFC586C0 },
-        { "elif", 0xFFC586C0 },
-        { "while", 0xFFC586C0 },
-        { "for", 0xFFC586C0 },
-        { "in", 0xFFC586C0 },
-        { "return", 0xFF569CD6 },
-        { "try", 0xFFC586C0 },
-        { "except", 0xFFC586C0 },
-        { "with", 0xFFC586C0 },
-        { "as", 0xFFC586C0 },
-        { "pass", 0xFF569CD6 },
-        { "break", 0xFF569CD6 },
-        { "continue", 0xFF569CD6 },
-        { "True", 0xFF569CD6 },
-        { "False", 0xFF569CD6 },
-        { "None", 0xFF569CD6 },
-    };
 
     public override StyledLine ParseLine(string line)
     {
-        L.Info($"Parsing line: '{line}'");
-        {
-            var styledLine = new StyledLine(line);
-            styledLine.Clear();
-            int i = 0;
-
-            while (i < line.Length)
-            {
-                int start = i;
-
-                if (splitSet.Contains(line[i]))
-                {
-                    if (!char.IsWhiteSpace(line[i]))
-                        styledLine.Add(new Token
-                        (
-                            i,
-                            line[i].ToString(),
-                            ColorDefault
-                        ));
-                    i++;
-                }
-                else
-                {
-                    var sb = new System.Text.StringBuilder();
-
-                    while (i < line.Length && !splitSet.Contains(line[i]))
-                    {
-                        sb.Append(line[i]);
-                        i++;
-                    }
-                    L.Info($"Parsed token: '{sb}' at {start}");
-
-                    var tokenText = sb.ToString();
-                    uint color = 0;
-                    keywordColors.TryGetValue(tokenText, out color);
-                    color = color == 0 ? ColorDefault : color;
-
-                    styledLine.Add(new Token
-                    (
-                        start,
-                        tokenText,
-                        color
-                    ));
-                }
-            }
-
-            return styledLine;
-        }
-
-        // // split python code into tokens
-        // var tokens = line.Split(' ', '\t', '(', ')', ':', '.', ',', ';');
-        // var styledLine = new StyledLine(line);
-        // styledLine.Clear();
-        // int column = 0;
-        // foreach (var token in tokens)
-        // {
-        //     if (string.IsNullOrWhiteSpace(token))
-        //     {
-        //         column += token.Length;
-        //         continue;
-        //     }
-        //
-        //     var txt = line.Substring(column, token.Length);
-        //     var tok = new Token(
-        //         column,
-        //         txt
-        //     );
-        //     if (txt == "while")
-        //         tok.Style.Color = ICodeFormatter.ColorNumber;
-        //     styledLine.Add(tok);
-        //     column += token.Length + 1; // +1 for the delimiter
-        // }
-        // return new StyledLine(line);
+        return StaticFormatter.ParseLine(line);
     }
 
     public override void ReplaceLine(int index, string newLine)
@@ -335,24 +290,16 @@ public class LSPFormatter : ICodeFormatter
     public override void ResetCode(string code)
     {
         IncrementVersion();
-        _changes.Add(new TextDocumentContentChangeEvent
-        {
-            range = new Range
-            {
-                start = new Position { line = 0, character = 0 },
-                end = new Position { line = Lines.Count, character = 0 }
-            },
-            text = code
-        });
+        _changes.Add(new TextDocumentContentChangeEvent { text = code });
         var lines = code.Split('\n');
         Lines.Clear();
         foreach (var line in lines)
-            AppendLine(line);
+            Lines.Add(ParseLine(line));
         OnCodeChanged();
     }
     // public void Dispose()
     // {
-    // L.Info("Disposing LSP Formatter and closing document");
+    // L.Debug("Disposing LSP Formatter and closing document");
     // LspClient.CloseDocument(Identifier.uri);
     // }
 }

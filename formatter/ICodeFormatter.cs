@@ -21,6 +21,7 @@ public struct Style
 
     public Style(uint color = 0xFFFFFFFF, uint background = 0)
     {
+        L.Debug($"Creating Style with Color: 0x{color:X8}, Background: 0x{background:X8}");
         Color = color;
         Background = background;
     }
@@ -245,6 +246,21 @@ public class StyledText : List<StyledLine>
         }
     }
 
+    public void AddLine(string text, Style style)
+    {
+        var line = new StyledLine(text);
+        line.Add(new Token(0, text, style));
+        Add(line);
+    }
+
+    public void AddWrapped(string text, int width, Style style)
+    {
+        if(style.Color == 0)
+            style = ICodeFormatter.DefaultStyle;
+        foreach (var line in IC10.IC10OpCode.WrapText(text, width))
+            AddLine(line, style);
+    }
+
     public static StyledText ErrorText(string message)
     {
         var text = new StyledText();
@@ -314,7 +330,8 @@ public abstract class ICodeFormatter
             _autocomplete = null;
             _tooltip = null;
             UpdateStatus();
-            UpdateAutocomplete();
+            if (DoUpdateAutocomplete())
+                UpdateAutocomplete();
         };
 
         OnCaretMoved += () =>
@@ -322,7 +339,8 @@ public abstract class ICodeFormatter
             _status = null;
             _autocomplete = null;
             UpdateStatus();
-            UpdateAutocomplete();
+            if (DoUpdateAutocomplete())
+                UpdateAutocomplete();
         };
     }
 
@@ -410,7 +428,7 @@ public abstract class ICodeFormatter
     {
         var lines = code.Split('\n');
         Lines.Clear();
-        L.Info($"Resetting code with {lines.Length} lines");
+        L.Debug($"Resetting code with {lines.Length} lines");
         foreach (var line in lines)
             AppendLine(line);
         OnCodeChanged();
@@ -510,6 +528,29 @@ public abstract class ICodeFormatter
 
         _status = token.Error;
     }
+
+    public virtual bool DoUpdateAutocomplete()
+    {
+        if (!Settings.EnableAutoComplete)
+            return false;
+
+        if (Editor.KeyMode != KeyMode.Insert)
+            return false;
+
+        var caret = Editor.CaretPos;
+
+        if (caret.Col == 0)
+            return false;
+
+        if (caret.Line >= Lines.Count)
+            return false;
+
+        if (!Editor.IsWordEnd(caret) && caret.Col < Lines[caret.Line].Length)
+            return false;
+
+        return true;
+    }
+
 
     public virtual void UpdateAutocomplete()
     {

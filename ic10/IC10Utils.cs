@@ -540,7 +540,7 @@ public class IC10OpCode
             Tooltip.Add(new StyledLine(descriptionLine));
     }
 
-    private static List<string> WrapText(string text, int maxLen)
+    public static List<string> WrapText(string text, int maxLen)
     {
         var lines = new List<string>();
         string currentLine = "";

@@ -97,10 +97,10 @@ public class StaticFormatter : ICodeFormatter
 
         foreach (var token in tokens)
         {
-            if (Keywords.ContainsKey(token.Text))
-                token.Style = Keywords[token.Text];
-            else if (token.Text.StartsWith(CommentPrefix))
+            if (token.Text.StartsWith(CommentPrefix))
                 token.Style = new Style { Color = ICodeFormatter.ColorComment };
+            else if (Keywords.ContainsKey(token.Text))
+                token.Style = Keywords[token.Text];
         }
         styledLine.AddRange(tokens);
 

@@ -33,10 +33,48 @@ public class LspClient
     public Action<string> OnError = (string msg) => { };
     public Action<string> OnInfo = (string msg) => { };
     public Action<PublishDiagnosticsParams> OnDiagnostics = (PublishDiagnosticsParams msg) => { };
+    public Action OnInitialized = () =>
+    {
+        // send workspace/didChangeWorkspaceFolders notification
+
+        // {
+        // "jsonrpc": "2.0",
+        //   "method": "workspace/didChangeConfiguration",
+        //   "params": {
+        //     "settings": {
+        //       "basedpyright": {
+        //         "analysis": {
+        //           "autoImportCompletions": false
+        //         }
+        //       }
+        //     }
+        //   }
+        // }
+    };
 
     public bool IsInitialized => _isInitialized.WaitOne(0);
 
-    public LspClient() { }
+    public LspClient()
+    {
+
+        OnInitialized += () =>
+        {
+
+            SendNotificationAsync("workspace/didChangeConfiguration", new
+            {
+                settings = new
+                {
+                    basedpyright = new
+                    {
+                        analysis = new
+                        {
+                            autoImportCompletions = false
+                        }
+                    }
+                }
+            }).Forget();
+        };
+    }
 
     // this should be called when the streams are ready
     protected void Init(Stream inputStream, Stream outputStream)
@@ -61,14 +99,28 @@ public class LspClient
 
     private async UniTask<JToken> InitializeAsync(string rootUri)
     {
+        rootUri = rootUri = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "ws");
+        rootUri = new Uri(rootUri).AbsoluteUri;
         var initParams = new
         {
             processId = (int?)null,
             rootUri = rootUri,
 
-            initializationOptions = new { },
+            initializationOptions = new
+            {
+                // venvPath = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv"),
+                // venv = "venv",
+                pythonPath = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Scripts", "python.exe"),
+                // pythonVersion = "3.14",
+                //         extraPaths = new string[] {
+                //             // Add any extra paths needed for the LSP server here
+                // Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Lib", "site-packages")
+                //
+                //         }
 
-            capabilities = new{},
+            },
+
+            capabilities = new { },
             // {
             //     workspace = new
             //     {
@@ -117,6 +169,7 @@ public class LspClient
             OnInfo("Server capabilities:\n" + caps.ToString(Formatting.None));
 
         _isInitialized.Set();
+        OnInitialized();
         L.Info("LSP Client is initialized.");
 
         return result;
@@ -384,6 +437,7 @@ public class LspClient
 
     public async void ChangeDocumentFull(VersionedTextDocumentIdentifier identifier, string newText)
     {
+        L.Info($"LSP Changing document {identifier.uri} to version {identifier.version} with full text change.");
         var changes = new TextDocumentContentChangeEvent[]
         {
             new TextDocumentContentChangeEvent
@@ -399,6 +453,54 @@ public class LspClient
         };
 
         await SendNotificationAsync("textDocument/didChange", @params);
+    }
+
+    public async UniTask<List<SignatureHelp>> RequestSignatureHelp(string uri, Position position)
+    {
+        var @params = new
+        {
+            textDocument = new TextDocumentIdentifier
+            {
+                uri = uri
+            },
+            position = position
+        };
+
+        try
+        {
+            var result = (await SendRequestAsync("textDocument/signatureHelp", @params)).ToObject<SignatureHelpList>();
+            return result.signatures.ToList();
+        }
+        catch (Exception ex)
+        {
+            OnError("Error requesting signatureHelp: " + ex);
+        }
+        return new List<SignatureHelp>();
+    }
+
+
+    public async UniTask<List<CompletionItem>> RequestCompletions(string uri, Position position)
+    {
+        var @params = new
+        {
+            textDocument = new TextDocumentIdentifier
+            {
+                uri = uri
+            },
+            position = position
+        };
+
+        try
+        {
+            var result = (await SendRequestAsync("textDocument/completion", @params)).ToObject<CompletionList>();
+
+            return result.items.ToList();
+        }
+        catch (Exception ex)
+        {
+            OnError("Error requesting completions: " + ex);
+        }
+        return new List<CompletionItem>();
     }
 
     public async UniTask<List<SemanticToken>> RequestSemanticTokens(string uri)
@@ -420,18 +522,7 @@ public class LspClient
             var prevLine = 0;
             var prevCol = 0;
 
-            var colorMap = new uint[]
-            {
-                ICodeFormatter.ColorFromHTML("#FFFFFF"),
-                ICodeFormatter.ColorFromHTML("#00FF00"),
-                ICodeFormatter.ColorFromHTML("#AFAF00"),
-                ICodeFormatter.ColorFromHTML("#FF8800"),
-                ICodeFormatter.ColorFromHTML("#00FFFF"),
-                ICodeFormatter.ColorFromHTML("#FF00FF"),
-                ICodeFormatter.ColorFromHTML("#8888FF"),
-                ICodeFormatter.ColorFromHTML("#FF0000"),
-                ICodeFormatter.ColorFromHTML("#88FF88"),
-            };
+            var colorMap = LSPUtils.ColorMap;
 
             var nColors = colorMap.Length;
 
@@ -453,15 +544,6 @@ public class LspClient
                 prevCol = tokens[tokens.Count - 1].Column;
             }
 
-            for (var i = 0; i < tokens.Count; i++)
-            {
-                var token = tokens[i];
-                OnInfo($"Token: Line {token.Line}, Col {token.Column}, Len {token.Length}, Type {token.Type}");
-                // if(token.Type == 6)
-                //     token.Color = 0xFFFF00FF; // Function - Blue
-
-            }
-
             return tokens;
 
         }
@@ -478,21 +560,53 @@ public class LspClient
     {
         string workingDir = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv");
         string PyRightExe = Path.Combine(workingDir, "Scripts", "basedpyright-langserver.exe");
-        // string NodeExe = Path.Combine(SiteDir, "nodejs_wheel", "node.exe");
-        // string PyRightJS = Path.Combine(SiteDir, "basedpyright", "langserver.index.js");
-        string Args = "--no-warnings --title \"abc\" --stdio";
+        string SiteDir = Path.Combine(workingDir, "Lib", "site-packages");
+        string NodeExe = Path.Combine(SiteDir, "nodejs_wheel", "node.exe");
+        string PyRightJS = Path.Combine(SiteDir, "basedpyright", "langserver.index.js");
+        string Args = $"/c {PyRightExe} --no-warnings --title \"abc\" --stdio";
+        string NodeArgs = PyRightJS + " " + Args;
         // string Args = "--stdio";
         var startInfo = new ProcessStartInfo
         {
-            FileName = PyRightExe,
+            FileName = "cmd.exe",
+            // FileName = PyRightExe,
             Arguments = Args,
+            // FileName = NodeExe,
+            // Arguments = NodeArgs,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true,
+            CreateNoWindow = false,
             WorkingDirectory = workingDir
         };
+
+        var info1 = new ProcessStartInfo
+        {
+            FileName = Path.Combine(workingDir, "Scripts", "basedpyright.exe"),
+            Arguments = "a.py --verbose",
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = false,
+            WorkingDirectory = workingDir
+        };
+
+        // // start info1
+        // var process1 = new Process
+        // {
+        //     StartInfo = info1,
+        //     EnableRaisingEvents = true
+        // };
+        //
+        // // wait for rocess1 and print output
+        // process1.Start();
+        // string output1 = process1.StandardOutput.ReadToEnd();
+        // string error1 = process1.StandardError.ReadToEnd();
+        // process1.WaitForExit();
+        // StationeersIC10Editor.L.Info("Pyright test output: " + output1);
+        // StationeersIC10Editor.L.Info("Pyright test error: " + error1);
 
         // startInfo.EnvironmentVariables["UV_THREADPOOL_SIZE"] = "1";
         // startInfo.EnvironmentVariables["NODE_DISABLE_COLORS"] = "1";

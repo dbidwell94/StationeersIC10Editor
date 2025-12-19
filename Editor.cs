@@ -703,6 +703,10 @@ namespace StationeersIC10Editor
 
         public string GetCode(TextRange range)
         {
+            if(!(bool)range)
+                return null;
+            if(range.Start == range.End)
+                return "";
             var start = range.Start;
             var end = range.End;
             var suffix = "";
@@ -818,6 +822,8 @@ namespace StationeersIC10Editor
 
         public TextRange GetWordAt(TextPosition pos)
         {
+            if(Lines[pos.Line].Length == 0)
+                return new TextRange(pos, pos);
             bool isWordChar = IsWordChar(this[pos]);
             bool IsWordBeginning =
                 pos.Col == 0

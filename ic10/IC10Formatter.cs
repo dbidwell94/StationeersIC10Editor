@@ -386,22 +386,7 @@ public class IC10CodeFormatter : StaticFormatter
         _autocomplete = null;
         _autocompleteInsertText = null;
 
-        if (!Settings.EnableAutoComplete)
-            return;
-
-        if (Editor.KeyMode != KeyMode.Insert)
-            return;
-
         var caret = Editor.CaretPos;
-
-        if (caret.Col == 0)
-            return;
-
-        if (caret.Line >= Lines.Count)
-            return;
-
-        if (!Editor.IsWordEnd(caret) && caret.Col < Lines[caret.Line].Length)
-            return;
 
         if (char.IsWhiteSpace(Editor[caret]))
             caret.Col--;
