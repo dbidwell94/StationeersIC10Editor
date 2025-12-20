@@ -159,7 +159,7 @@ public class LSPFormatter : ICodeFormatter
 
         L.Debug($"Received {completions.Count} completions from LSP");
         StyledText items = new StyledText();
-        var colorMap = LSPUtils.CompletionColorMap;
+        var colorMap = ColorTheme.Default.Colors;
         foreach (var item in completions)
         {
             if (commonPrefix == null)

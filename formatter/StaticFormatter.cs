@@ -60,7 +60,7 @@ public class StaticFormatter : ICodeFormatter
             {
                 var token = new Token(start, t, ICodeFormatter.ColorDefault);
                 if (StringDelimiters.Contains(t[0]) && t.Length >= 2 && t[t.Length - 1] == t[0])
-                    token.Style = LSPUtils.ColorMap[18]; // String color
+                    token.Style = ColorTheme.Default.Colors[18]; // String color
                 tokens.Add(token);
             }
         };
@@ -100,7 +100,7 @@ public class StaticFormatter : ICodeFormatter
             if (token.Text.StartsWith(CommentPrefix))
                 token.Style = new Style { Color = ICodeFormatter.ColorComment };
             else if (Keywords.ContainsKey(token.Text))
-                token.Style = LSPUtils.ColorMap[Keywords[token.Text]];
+                token.Style = ColorTheme.Default.Colors[Keywords[token.Text]];
         }
         styledLine.AddRange(tokens);
 

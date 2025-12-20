@@ -522,7 +522,7 @@ public class LspClient
             var prevLine = 0;
             var prevCol = 0;
 
-            var colorMap = LSPUtils.ColorMap;
+            var colorMap = ColorTheme.Default.Colors;
 
             var nColors = colorMap.Length;
 
