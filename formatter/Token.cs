@@ -1,13 +1,8 @@
 namespace StationeersIC10Editor;
 
-using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
-using System.Text;
 
 using ImGuiNET;
-
 using UnityEngine;
 
 using static Settings;
@@ -255,11 +250,31 @@ public class StyledText : List<StyledLine>
         Add(line);
     }
 
+    public static List<string> WrapText(string text, int maxLen)
+    {
+        var lines = new List<string>();
+        string currentLine = "";
+        foreach (var word in text.Split(' '))
+        {
+            if (currentLine.Length + word.Length + 1 > maxLen)
+            {
+                lines.Add(currentLine);
+                currentLine = "";
+            }
+            if (currentLine.Length > 0)
+                currentLine += " ";
+            currentLine += word;
+        }
+        if (currentLine.Length > 0)
+            lines.Add(currentLine);
+        return lines;
+    }
+
     public void AddWrapped(string text, int width, Style style)
     {
         if (style.Color == 0)
             style = ICodeFormatter.DefaultStyle;
-        foreach (var line in IC10.IC10OpCode.WrapText(text, width))
+        foreach (var line in WrapText(text, width))
             AddLine(line, style);
     }
 

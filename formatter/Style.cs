@@ -1,17 +1,5 @@
 namespace StationeersIC10Editor;
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
-using System.Text;
-
-using ImGuiNET;
-
-using UnityEngine;
-
-using static Settings;
-
 // style struct to hold color and background info
 // there will be more fields later (squiggle underlines for instance)
 public struct Style

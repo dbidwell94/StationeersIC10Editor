@@ -1,6 +1,6 @@
-using System.Collections.Generic;
-
 namespace StationeersIC10Editor;
+
+using System.Collections.Generic;
 
 public class StaticFormatter : ICodeFormatter
 {

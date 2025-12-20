@@ -1,77 +1,75 @@
+namespace StationeersIC10Editor;
 
-namespace StationeersIC10Editor
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+
+public static class CodeFormatters
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Reflection;
+    private static readonly Dictionary<string, Type> formatters = new Dictionary<string, Type>();
+    private static string defaultFormatterName = "Plain";
 
-    public static class CodeFormatters
+    public static List<string> FormatterNames => new List<string>(formatters.Keys);
+
+    public static void RegisterFormatter(string name, Type formatterType, bool isDefault = false)
     {
-        private static readonly Dictionary<string, Type> formatters = new Dictionary<string, Type>();
-        private static string defaultFormatterName = "Plain";
+        L.Info($"Registering code formatter: {name}");
 
-        public static List<string> FormatterNames => new List<string>(formatters.Keys);
+        if (!typeof(ICodeFormatter).IsAssignableFrom(formatterType))
+            throw new ArgumentException($"Type {formatterType.FullName} does not implement ICodeFormatter.");
 
-        public static void RegisterFormatter(string name, Type formatterType, bool isDefault = false)
+        formatters[name] = formatterType;
+
+        if (isDefault)
+            defaultFormatterName = name;
+    }
+
+    public static ICodeFormatter GetFormatter(string name = null)
+    {
+        if (name == null || !formatters.ContainsKey(name))
+            return GetFormatter(defaultFormatterName);
+
+        return CreateFormatterInstance(name, formatters[name]);
+    }
+
+    /// <summary>
+    /// Finds the formatter with highest static MatchingScore(input)
+    /// </summary>
+    public static ICodeFormatter GetFormatterByMatching(string input)
+    {
+        double bestScore = double.MinValue;
+        string bestName = null;
+
+        if (string.IsNullOrEmpty(input))
+            return GetFormatter();
+
+        foreach (var entry in formatters)
         {
-            L.Info($"Registering code formatter: {name}");
+            string name = entry.Key;
+            Type type = entry.Value;
 
-            if (!typeof(ICodeFormatter).IsAssignableFrom(formatterType))
-                throw new ArgumentException($"Type {formatterType.FullName} does not implement ICodeFormatter.");
+            var method = type.GetMethod("MatchingScore", BindingFlags.Public | BindingFlags.Static);
 
-            formatters[name] = formatterType;
+            if (method == null)
+                continue;
 
-            if (isDefault)
-                defaultFormatterName = name;
-        }
+            double score = (double)method.Invoke(null, new object[] { input });
+            L.Info($"Formatter '{name}' has matching score {score} for input.");
 
-        public static ICodeFormatter GetFormatter(string name = null)
-        {
-            if (name == null || !formatters.ContainsKey(name))
-                return GetFormatter(defaultFormatterName);
-
-            return CreateFormatterInstance(name, formatters[name]);
-        }
-
-        /// <summary>
-        /// Finds the formatter with highest static MatchingScore(input)
-        /// </summary>
-        public static ICodeFormatter GetFormatterByMatching(string input)
-        {
-            double bestScore = double.MinValue;
-            string bestName = null;
-
-            if (string.IsNullOrEmpty(input))
-                return GetFormatter();
-
-            foreach (var entry in formatters)
+            if (score > bestScore)
             {
-                string name = entry.Key;
-                Type type = entry.Value;
-
-                var method = type.GetMethod("MatchingScore", BindingFlags.Public | BindingFlags.Static);
-
-                if (method == null)
-                    continue;
-
-                double score = (double)method.Invoke(null, new object[] { input });
-                L.Info($"Formatter '{name}' has matching score {score} for input.");
-
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    bestName = name;
-                }
+                bestScore = score;
+                bestName = name;
             }
-
-            return GetFormatter(bestName);
         }
 
-        private static ICodeFormatter CreateFormatterInstance(string name, Type type)
-        {
-            var instance = (ICodeFormatter)Activator.CreateInstance(type);
-            instance.Name = name;
-            return instance;
-        }
+        return GetFormatter(bestName);
+    }
+
+    private static ICodeFormatter CreateFormatterInstance(string name, Type type)
+    {
+        var instance = (ICodeFormatter)Activator.CreateInstance(type);
+        instance.Name = name;
+        return instance;
     }
 }
