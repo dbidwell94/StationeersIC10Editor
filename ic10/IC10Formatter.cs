@@ -136,11 +136,6 @@ public class IC10CodeFormatter : StaticFormatter
     public override StyledLine ParseLine(string text)
     {
         var line = TParseLine<IC10Line>(text);
-        // var ic10Line = new IC10Line(text);
-        // ic10Line.Clear();
-        // foreach (var token in line)
-        //     if (!string.IsNullOrWhiteSpace(token.Text))
-        //         ic10Line.Add(token);
 
         IdentifyTypesAndAddTokens(line);
         line.UpdateTokenColors(types);

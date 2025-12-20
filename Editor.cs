@@ -704,7 +704,7 @@ namespace StationeersIC10Editor
         public string GetCode(TextRange range)
         {
             if(!(bool)range)
-                return null;
+                return "";
             if(range.Start == range.End)
                 return "";
             var start = range.Start;
@@ -764,8 +764,6 @@ namespace StationeersIC10Editor
             range = range.Sorted();
             bool removeLast = range.End.Col > Lines[range.End.Line].Length;
             range = Clamp(range);
-            L.Info($"Deleting range: {range}, removeLast={removeLast}");
-                   
 
             if (pushUndo)
                 PushUndoState(false);
@@ -788,12 +786,10 @@ namespace StationeersIC10Editor
             }
             else
             {
-                L.Info($" Deleting multi-line range from {start} to {end}");
                 string firstLine = Lines[start.Line].Text;
                 string lastLine = Lines[end.Line].Text;
                 string newFirstLine = firstLine.Substring(0, start.Col);
                 string newLastLine = lastLine.Substring(end.Col, lastLine.Length - end.Col);
-                L.Info($" Merging lines: '{newFirstLine}' + '{newLastLine}'");
                 ReplaceLine(start.Line, newFirstLine + newLastLine);
 
                 for (int i = end.Line; i > start.Line; i--)

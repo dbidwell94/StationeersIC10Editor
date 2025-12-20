@@ -304,7 +304,7 @@ public abstract class ICodeFormatter
             _autocomplete = null;
             _tooltip = null;
             UpdateStatus();
-            if (DoUpdateAutocomplete())
+            if (NeedsUpdateAutocomplete())
                 UpdateAutocomplete();
         };
 
@@ -313,7 +313,7 @@ public abstract class ICodeFormatter
             _status = null;
             _autocomplete = null;
             UpdateStatus();
-            if (DoUpdateAutocomplete())
+            if (NeedsUpdateAutocomplete())
                 UpdateAutocomplete();
         };
     }
@@ -503,7 +503,7 @@ public abstract class ICodeFormatter
         _status = token.Error;
     }
 
-    public virtual bool DoUpdateAutocomplete()
+    public virtual bool NeedsUpdateAutocomplete()
     {
         if (!Settings.EnableAutoComplete)
             return false;
