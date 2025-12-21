@@ -49,6 +49,7 @@ public class IC10CodeFormatter : StaticFormatter
             UpdateDataType(null, defer: false);
             UpdateRegisterUsage();
         };
+        OnCaretMoved += () => UpdateJumpTarget();
     }
 
     public string TrimToken(string token)
@@ -242,6 +243,46 @@ public class IC10CodeFormatter : StaticFormatter
         }
 
         line.UpdateTokenColors(types);
+    }
+
+    public void UpdateJumpTarget()
+    {
+        LineStyles.Clear();
+        var line = Lines[Editor.CaretPos.Line] as IC10Line;
+        if (line == null || !line.IsInstruction || line.NumCodeTokens < 2)
+            return;
+
+        var instruction = line[0].Text;
+        if (!instruction.StartsWith("j") && !instruction.StartsWith("b"))
+            return;
+
+        bool isRelative = instruction.StartsWith("br");
+
+        var operand = line[1];
+
+        int targetLine = -1;
+        if (int.TryParse(operand.Text, out int lineNum))
+            targetLine = lineNum;
+        else if (!operand.IsError && labels.ContainsKey(TrimToken(operand.Text)))
+        {
+            // find line with label
+            string label = TrimToken(operand.Text);
+            for (int i = 0; i < Lines.Count; i++)
+            {
+                var l = Lines[i] as IC10Line;
+                if (l != null && l.IsLabel && TrimToken(l[0].Text) == label)
+                {
+                    targetLine = i;
+                    break;
+                }
+            }
+        }
+        else return;
+
+        if (isRelative)
+            targetLine += Editor.CaretPos.Line;
+
+        LineStyles[targetLine] = new Style(ColorLabel);
     }
 
     public void UpdateDataType(string newToken, bool defer = true)

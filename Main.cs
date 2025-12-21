@@ -55,6 +55,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
     public static ConfigEntry<float> ScaleFactor;
     public static ConfigEntry<float> TooltipDelay;
     public static ConfigEntry<int> LineSpacingOffset;
+    public static ConfigEntry<bool> CollapseOnGameWindow;
 
     private void BindAllConfigs()
     {
@@ -105,6 +106,12 @@ public class IC10EditorPlugin : BaseUnityPlugin
             "Autocompletion",
             true,
             "Enable autocompletion/suggestions (trigger with Tab key)"
+        );
+        CollapseOnGameWindow = Config.Bind(
+            "General",
+            "CollapseOnGameWindow",
+            true,
+            "Automatically collapse the IC10 editor when Stationpedia or other game windows are opened"
         );
     }
 

@@ -218,7 +218,7 @@ public abstract class ICodeFormatter
                         pos.x + offset,
                         pos.y + LineHeight
                     ),
-                    ICodeFormatter.ColorError,
+                    style.Color,
                     5.0f
                 );
             }

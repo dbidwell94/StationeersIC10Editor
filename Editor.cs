@@ -145,6 +145,7 @@ public static class Settings
     public static float Scale => Mathf.Clamp(IC10EditorPlugin.ScaleFactor.Value, 0.25f, 5.0f);
     public static bool EnableAutoComplete => IC10EditorPlugin.EnableAutoComplete.Value;
     public static int LineSpacingOffset => IC10EditorPlugin.LineSpacingOffset.Value;
+    public static bool CollapseOnGameWindow => IC10EditorPlugin.CollapseOnGameWindow.Value;
 
     public static Vector2 buttonSize => Scale * new Vector2(85, 0);
     public static Vector2 smallButtonSize => Scale * new Vector2(50, 0);
@@ -286,7 +287,7 @@ public class Editor
         }
         set
         {
-            if(IsReadOnly)
+            if (IsReadOnly)
                 return;
             CaretPos = value.CaretPos;
             CodeFormatter.ResetCode(value.Code);
@@ -738,7 +739,7 @@ public class Editor
 
     public void Paste()
     {
-        if(IsReadOnly)
+        if (IsReadOnly)
             return;
         if (!DeleteSelectedCode())
             PushUndoState(false);
@@ -1125,8 +1126,6 @@ public class Editor
         clipper.End();
 
         CodeFormatter.AfterDrawLines(_textAreaOrigin, _textAreaSize);
-
-        CodeFormatter.LineStyles[10] = new Style(ICodeFormatter.ColorError, ICodeFormatter.ColorLineNumber);
 
         ImGui.EndChild();
         ImGui.SetCursorScreenPos(posPrev);
@@ -1806,8 +1805,8 @@ public class EditorWindow
 
     private bool _hasFocus = false;
     private int _openGameWindows = 0;
-    private Vector2 _windowPos = new Vector2(100, 100);
     private bool _didGameWindowOpen = false;
+    private bool _didGameWindowClose = false;
 
     public bool HasFocus => _hasFocus && !_librarySearchVisible;
 
@@ -1819,7 +1818,8 @@ public class EditorWindow
         foreach (var window in InputSourceCode.Instance.HelpWindows)
             count += window.IsVisible ? 1 : 0;
 
-        _didGameWindowOpen = count > _openGameWindows;
+        _didGameWindowOpen = count > 0 && _openGameWindows == 0;
+        _didGameWindowClose = count == 0 && _openGameWindows > 0;
         _openGameWindows = count;
     }
 
@@ -1848,32 +1848,31 @@ public class EditorWindow
                 Math.Min(1200, displaySize.x - 100),
                 displaySize.y - 100
             );
-            var _windowPos = 0.5f * (displaySize - windowSize);
+            var windowPos = 0.5f * (displaySize - windowSize);
 
-            _windowPos.x = Mathf.Round(_windowPos.x);
-            _windowPos.y = Mathf.Round(_windowPos.y);
+            windowPos.x = Mathf.Round(windowPos.x);
+            windowPos.y = Mathf.Round(windowPos.y);
 
-            _windowPos = Scale * _windowPos;
+            windowPos = Scale * windowPos;
 
             ImGui.SetNextWindowSize(windowSize);
-            ImGui.SetNextWindowPos(_windowPos);
+            ImGui.SetNextWindowPos(windowPos);
             IsInitialized = true;
         }
 
         CalcDidGameWindowOpen();
-        if (_didGameWindowOpen)
+        if (CollapseOnGameWindow)
         {
-            _windowPos.x = Math.Max(0.5f * ImGui.GetIO().DisplaySize.x + 50.0f, _windowPos.x);
-            _windowPos.x = Mathf.Round(_windowPos.x);
-            _windowPos.y = Mathf.Round(_windowPos.y);
-            ImGui.SetNextWindowPos(_windowPos);
+            if (_didGameWindowOpen)
+                ImGui.SetNextWindowCollapsed(true);
+            if (_didGameWindowClose)
+                ImGui.SetNextWindowCollapsed(false);
         }
 
         ImGui.Begin(Title + "###IC10EditorWindow", ImGuiWindowFlags.NoSavedSettings);
         ImGui.GetStyle().Colors[(int)ImGuiCol.Tab] = new Vector4(0.2f, 0.2f, 0.2f, 1.0f);
 
         ImGui.SetWindowFontScale(Scale);
-        _windowPos = ImGui.GetWindowPos();
         UpdateTextSize();
         DrawHeader();
 
@@ -2028,6 +2027,7 @@ public class EditorWindow
         ImGui.Separator();
         ImGui.Text("\nConfiguration:");
         DrawBoolOption("Pause Game on Open", IC10EditorPlugin.PauseOnOpen);
+        DrawBoolOption("Collapse when other window is open", IC10EditorPlugin.CollapseOnGameWindow);
         DrawBoolOption("Enforce 128 Lines Limit", IC10EditorPlugin.EnforceLineLimit);
         DrawBoolOption("Enforce 4096 Bytes Limit", IC10EditorPlugin.EnforceByteLimit);
         DrawFloatOption("UI Scaling", IC10EditorPlugin.ScaleFactor, 0.25f, 5.0f);
