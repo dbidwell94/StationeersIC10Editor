@@ -572,45 +572,51 @@ public class KeyHandler
             _lastMousePos = mousePos;
         }
 
-        if (Window.IsMouseInsideTextArea())
+        foreach (var editor in Window.ActiveTab.Editors)
         {
-            if (ctrlDown)
+            if (editor.IsMouseInsideTextArea())
             {
-                if (ImGui.IsMouseReleased(0))
+                var index = Window.ActiveTab.Editors.IndexOf(editor);
+                if (ImGui.IsMouseDown(0))
+                    Window.SetActiveEditor(index);
+                if (ctrlDown)
                 {
-                    OnKeyPressed("Ctrl+Click");
-                    OpenStationPedia(Window.GetTextPositionFromMouse());
+                    if (ImGui.IsMouseReleased(0))
+                    {
+                        OnKeyPressed("Ctrl+Click");
+                        OpenStationPedia(editor.GetTextPositionFromMouse());
+                    }
                 }
-            }
-            else
-            {
-                if (ImGui.IsMouseDoubleClicked(0))
+                else
                 {
-                    OnKeyPressed("DoubleClick");
-                    _isSelecting = false;
-                    var clickPos = Window.GetTextPositionFromMouse();
-                    var range = Editor.GetWordAt(clickPos);
+                    if (ImGui.IsMouseDoubleClicked(0))
+                    {
+                        OnKeyPressed("DoubleClick");
+                        _isSelecting = false;
+                        var clickPos = editor.GetTextPositionFromMouse();
+                        var range = editor.GetWordAt(clickPos);
 
-                    Editor.Selection.Start = range.Start;
-                    Editor.Selection.End = range.End;
-                    CaretPos = range.End;
-                    InsertMode();
+                        editor.Selection.Start = range.Start;
+                        editor.Selection.End = range.End;
+                        CaretPos = range.End;
+                        InsertMode();
+                    }
+                    else if (ImGui.IsMouseClicked(0)) // Left click
+                    {
+                        OnKeyPressed("Click");
+                        _isSelecting = true;
+                        var clickPos = editor.GetTextPositionFromMouse();
+                        CaretPos = clickPos;
+                        editor.Selection.Start = clickPos;
+                        editor.Selection.End.Reset();
+                    }
+                    else if (_isSelecting)
+                        editor.Selection.End = editor.GetTextPositionFromMouse();
+
+                    if (ImGui.IsMouseReleased(0))
+                        _isSelecting = false;
+
                 }
-                else if (ImGui.IsMouseClicked(0)) // Left click
-                {
-                    OnKeyPressed("Click");
-                    _isSelecting = true;
-                    var clickPos = Window.GetTextPositionFromMouse();
-                    CaretPos = clickPos;
-                    Editor.Selection.Start = clickPos;
-                    Editor.Selection.End.Reset();
-                }
-                else if (_isSelecting)
-                    Editor.Selection.End = Window.GetTextPositionFromMouse();
-
-                if (ImGui.IsMouseReleased(0))
-                    _isSelecting = false;
-
             }
         }
     }

@@ -153,6 +153,14 @@ public class IC10Utils
 
                 _types["define"] = DataType.Define;
                 _types["alias"] = DataType.Alias;
+
+                foreach (var prefab in Prefab.AllPrefabs)
+                {
+                    if (prefab as ILogicable == null)
+                        continue;
+
+                    _addType("HASH(\"" + prefab.PrefabName + "\")", DataType.Number);
+                }
             }
             return _types;
         }

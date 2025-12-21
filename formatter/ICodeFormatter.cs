@@ -173,10 +173,57 @@ public abstract class ICodeFormatter
         OnCodeChanged();
     }
 
+    public virtual void AfterDrawLines(Vector2 pos, Vector2 size)
+    {
+        // // Example: Draw a button at the top-right corner to toggle read-only mode
+        // float width = 60;
+        // ImGui.SetCursorScreenPos(
+        //     pos + new Vector2(
+        //         size.x - width - 10,
+        //         0
+        //     )
+        // );
+        //
+        // string label = Editor.IsReadOnly ? "RO" : "RW";
+        //
+        // if (ImGui.Button(label, new Vector2(width, 0)))
+        //     Editor.IsReadOnly = !Editor.IsReadOnly;
+    }
+
+    public Dictionary<int, Style> LineStyles = new Dictionary<int, Style>();
+
     public virtual void DrawLine(int lineIndex, TextRange selection, bool drawLineNumber = true)
     {
         Vector2 pos = ImGui.GetCursorScreenPos();
         var drawList = ImGui.GetWindowDrawList();
+
+        StyledLine line = Lines[lineIndex];
+
+        Style lineStyle = line.Style;
+
+        if (LineStyles.TryGetValue(lineIndex, out Style style))
+            lineStyle = style;
+
+        if (lineStyle.Color > 0)
+        {
+            float offset = 4.8f * CharWidth - ImGui.GetStyle().WindowPadding.x;
+            if (style.Color > 0)
+            {
+                drawList.AddLine(
+                    pos + new Vector2(
+                        offset,
+                        0
+                    ),
+                    new Vector2(
+                        pos.x + offset,
+                        pos.y + LineHeight
+                    ),
+                    ICodeFormatter.ColorError,
+                    5.0f
+                );
+            }
+        }
+
 
         if (drawLineNumber)
         {
@@ -188,10 +235,23 @@ public abstract class ICodeFormatter
             pos.x += ICodeFormatter.LineNumberOffset * CharWidth;
         }
 
+        if (lineStyle.Background > 0)
+        {
+            drawList.AddRectFilled(
+                new Vector2(
+                    pos.x,
+                    pos.y
+                ),
+                new Vector2(
+                    pos.x + ImGui.GetContentRegionAvail().x,
+                    pos.y + LineHeight
+                ),
+                style.Background
+            );
+        }
+
         int selectionMin = -1,
             selectionMax = -1;
-        StyledLine line = Lines[lineIndex];
-
         // Calculate Selection Rect
         if (selection)
         {
@@ -362,8 +422,10 @@ public abstract class ICodeFormatter
                 pos.x += CharWidth * 2;
             }
             var list = ImGui.GetWindowDrawList();
+            list.PushClipRectFullScreen();
             list.AddRectFilled(pos, pos + completeSize, ImGui.ColorConvertFloat4ToU32(new Vector4(0.2f, 0.2f, 0.2f, 0.9f)), 5.0f);
             _autocomplete.Draw(pos + ImGui.GetStyle().WindowPadding);
+            list.PopClipRect();
         }
     }
 

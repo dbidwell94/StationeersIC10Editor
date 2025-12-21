@@ -89,6 +89,8 @@ public class Token
 public class StyledLine : List<Token>
 {
     protected string _content = "";
+    public Style Style = new Style();
+
     public string Text
     {
         get => _content;

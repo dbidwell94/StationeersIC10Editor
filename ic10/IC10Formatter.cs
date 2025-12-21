@@ -474,7 +474,16 @@ public class IC10CodeFormatter : StaticFormatter
         if (commonPrefix.Length > 0)
             _autocompleteInsertText = commonPrefix;
 
-        L.Debug($"Common prefix for autocomplete: |{commonPrefix}|");
+        if (_autocomplete.Count > 15)
+        {
+            var trimmed = new StyledText();
+            for (int i = 0; i < 15; i++)
+                trimmed.Add(_autocomplete[i]);
+            var moreLine = new StyledLine($"... and {_autocomplete.Count - 15} more");
+            moreLine.Add(new Token(0, $"... and {_autocomplete.Count - 15} more", ColorFromHTML("#888888")));
+            trimmed.Add(moreLine);
+            _autocomplete = trimmed;
+        }
     }
 
     private bool[] _registerUsage = new bool[16];

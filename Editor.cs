@@ -185,7 +185,6 @@ public static class Settings
 public class Editor
 {
     public object Target;
-    public string Title = "Motherboard";
     public ProgrammableChipMotherboard PCM => Target as ProgrammableChipMotherboard;
     public InstructionData InstructionData => Target as InstructionData;
     bool IsMotherboard => PCM != null;
@@ -267,7 +266,7 @@ public class Editor
         get { return Lines[CaretLine].Text; }
         set
         {
-            if (value == Lines[CaretLine].Text)
+            if (IsReadOnly || value == Lines[CaretLine].Text)
                 return;
 
             ReplaceLine(CaretLine, value);
@@ -287,12 +286,55 @@ public class Editor
         }
         set
         {
-            // CodeFormatter.Lines = value.FormattedText;
+            if(IsReadOnly)
+                return;
             CaretPos = value.CaretPos;
             CodeFormatter.ResetCode(value.Code);
             _isCodeChanged = true;
         }
     }
+
+    private Vector2 _textAreaOrigin,
+        _textAreaSize;
+    private float _scrollY = 0.0f;
+
+    public bool IsMouseInsideTextArea()
+    {
+        Vector2 mousePos = ImGui.GetMousePos();
+        float px = _textAreaOrigin.x;
+        float py = _textAreaOrigin.y + ImGui.GetStyle().FramePadding.y;
+        return mousePos.x >= px
+            && mousePos.x <= px + _textAreaSize.x
+            && mousePos.y >= py
+            && mousePos.y <= py + _textAreaSize.y;
+    }
+
+    public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
+    {
+        Vector2 mousePos = ImGui.GetMousePos();
+
+        int line =
+            (int)((mousePos.y + LineSpacing - _firstLineY) / LineHeight) + _firstLineIndex;
+        int column = (int)(
+            (mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset
+        );
+
+        if (!clampToTextArea && (line < 0 || line >= Lines.Count))
+        {
+            return new TextPosition(-1, -1);
+        }
+
+        line = Mathf.Clamp(line, 0, Lines.Count - 1);
+        column = Mathf.Clamp(column, 0, Lines[line].Length);
+
+        return new TextPosition(line, column);
+    }
+
+    private Vector2 _caretPixelPos;
+    private int _firstLineIndex = -1;
+    private float _firstLineY = -1.0f;
+
+
 
     public void PushUndoState(bool merge = true)
     {
@@ -329,7 +371,7 @@ public class Editor
 
     public void Undo()
     {
-        if (UndoList.Count > 0)
+        if (!IsReadOnly && UndoList.Count > 0)
         {
             RedoList.AddFirst(State);
             State = UndoList.First.Value;
@@ -339,7 +381,7 @@ public class Editor
 
     public void Redo()
     {
-        if (RedoList.Count > 0)
+        if (!IsReadOnly && RedoList.Count > 0)
         {
             UndoList.AddFirst(State);
             State = RedoList.First.Value;
@@ -349,7 +391,7 @@ public class Editor
 
     public void RemoveLine(int lineIndex)
     {
-        if (lineIndex < 0 || lineIndex >= Lines.Count)
+        if (IsReadOnly || lineIndex < 0 || lineIndex >= Lines.Count)
             return;
 
         if (CodeFormatter.Lines.Count == 1)
@@ -361,7 +403,7 @@ public class Editor
 
     public void ReplaceLine(int lineIndex, string newLine)
     {
-        if (lineIndex < 0 || lineIndex >= Lines.Count)
+        if (IsReadOnly || lineIndex < 0 || lineIndex >= Lines.Count)
             return;
 
         CodeFormatter.ReplaceLine(lineIndex, newLine);
@@ -370,7 +412,7 @@ public class Editor
 
     public void InsertLine(int lineIndex, string newLine)
     {
-        if (lineIndex < 0 || lineIndex > Lines.Count)
+        if (IsReadOnly || lineIndex < 0 || lineIndex > Lines.Count)
             return;
 
         CodeFormatter.InsertLine(lineIndex, newLine);
@@ -674,7 +716,7 @@ public class Editor
 
     public void Cut()
     {
-        if (!HaveSelection)
+        if (IsReadOnly || !HaveSelection)
             return;
         GameManager.Clipboard = SelectedCode;
         DeleteSelectedCode();
@@ -696,6 +738,8 @@ public class Editor
 
     public void Paste()
     {
+        if(IsReadOnly)
+            return;
         if (!DeleteSelectedCode())
             PushUndoState(false);
         Insert(GameManager.Clipboard);
@@ -758,7 +802,7 @@ public class Editor
 
     public bool DeleteRange(TextRange range, bool pushUndo = true)
     {
-        if (!(bool)range)
+        if (IsReadOnly || !(bool)range)
             return false;
 
         range = range.Sorted();
@@ -806,7 +850,7 @@ public class Editor
 
     public bool DeleteSelectedCode()
     {
-        if (DeleteRange(Selection))
+        if (IsReadOnly || DeleteRange(Selection))
         {
             Selection.Reset();
             _isCodeChanged = true;
@@ -833,6 +877,8 @@ public class Editor
 
     public void ClearCode(bool pushUndo = true)
     {
+        if (IsReadOnly)
+            return;
         if (pushUndo)
             PushUndoState(false);
         CaretPos = new TextPosition(0, 0);
@@ -842,11 +888,15 @@ public class Editor
 
     public void Insert(string code)
     {
+        if (IsReadOnly)
+            return;
         Insert(code, CaretPos);
     }
 
     public void Insert(string code, TextPosition pos)
     {
+        if (IsReadOnly)
+            return;
         code = code.Replace("\r", string.Empty);
         if (string.IsNullOrEmpty(code))
             return;
@@ -975,7 +1025,156 @@ public class Editor
             CodeFormatter.OnCodeChanged();
             _isCodeChanged = false;
         }
+        CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
     }
+
+    public bool HasFocus => KeyHandler.Editor == this;
+
+    public unsafe void Draw(Vector2 pos, Vector2 size, string id)
+    {
+        var padding = ImGui.GetStyle().FramePadding;
+        _textAreaSize = size;
+        float scrollHeight = size.y;
+        ImGui.BeginChild(id, size, true);
+        _textAreaOrigin = pos;
+        _textAreaSize = size;
+        var posPrev = ImGui.GetCursorScreenPos();
+
+        var linePos = _textAreaOrigin;
+        linePos.x += 4.8f * CharWidth;
+        ImGui
+            .GetWindowDrawList()
+            .AddLine(
+                linePos,
+                new Vector2(linePos.x, linePos.y + LineHeight * (Lines.Count + 0.3f)),
+                ICodeFormatter.ColorLineNumber,
+                1.5f
+            );
+
+        ImGuiListClipperPtr clipper = new ImGuiListClipperPtr(
+            ImGuiNative.ImGuiListClipper_ImGuiListClipper()
+            );
+
+        clipper.Begin(Lines.Count);
+
+        Vector2 mousePos = ImGui.GetMousePos();
+
+        if (ScrollToCaret > 0)
+        {
+            float lineHeight = LineHeight;
+            float lineSpacing = ImGui.GetStyle().ItemSpacing.y;
+
+            float pageHeight = (Lines.Count * lineHeight) - ImGui.GetScrollMaxY();
+            float scrollY = ImGui.GetScrollY();
+            float viewTop = _scrollY;
+            float viewBottom = _scrollY + pageHeight;
+
+            float caretTop = CaretLine * lineHeight;
+            float caretBottom = caretTop + lineHeight;
+
+            if (caretTop < viewTop)
+            {
+                scrollY = caretTop;
+            }
+            else if (caretBottom > viewBottom)
+            {
+                scrollY = caretBottom - pageHeight + lineSpacing;
+            }
+
+            ImGui.SetScrollY(Math.Min(scrollY, ImGui.GetScrollMaxY()));
+            ScrollToCaret -= 1;
+        }
+
+        _scrollY = ImGui.GetScrollY();
+
+        _firstLineIndex = -1;
+
+        var selection = Selection.Sorted();
+
+        while (clipper.Step())
+        {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+            {
+                var ppos = ImGui.GetCursorScreenPos();
+                CodeFormatter.DrawLine(i, selection);
+
+                if (i == CaretLine && HasFocus)
+                {
+                    _caretPixelPos = ppos;
+                    _caretPixelPos.x +=
+                        CharWidth * (CaretCol + ICodeFormatter.LineNumberOffset);
+                    DrawCaret(_caretPixelPos);
+                }
+                if (_firstLineIndex == -1)
+                {
+                    _firstLineIndex = i;
+                    _firstLineY = ppos.y;
+                }
+                ppos.y += LineHeight;
+                ImGui.SetCursorScreenPos(ppos);
+            }
+        }
+
+        if (EnableAutoComplete)
+        {
+            var completePos = _caretPixelPos + new Vector2(0, 1.5f * LineHeight);
+            ImGui.SetCursorScreenPos(_caretPixelPos);
+            CodeFormatter.DrawAutocomplete(completePos);
+        }
+
+        clipper.End();
+
+        CodeFormatter.AfterDrawLines(_textAreaOrigin, _textAreaSize);
+
+        CodeFormatter.LineStyles[10] = new Style(ICodeFormatter.ColorError, ICodeFormatter.ColorLineNumber);
+
+        ImGui.EndChild();
+        ImGui.SetCursorScreenPos(posPrev);
+    }
+
+    public void DrawCaret(Vector2 pos)
+    {
+
+        if (KeyHandler.Editor != this)
+            return;
+
+        var drawList = ImGui.GetWindowDrawList();
+        var height = LineHeight;
+        if (LineSpacingOffset < 0)
+        {
+            height = height - LineSpacingOffset;
+            pos.y -= LineSpacingOffset / 2;
+        }
+
+        if (KeyHandler.Mode == KeyMode.Insert)
+        {
+            bool blinkOn = ((int)((ImGui.GetTime() - TimeLastAction) * 2) % 2) == 0;
+            if (blinkOn)
+            {
+                drawList.AddLine(
+                    pos,
+                    new Vector2(pos.x, pos.y + height),
+                    ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, 1)),
+                    1.5f
+                );
+            }
+        }
+        else
+        {
+            // Draw a block cursor
+            drawList.AddRect(
+                new Vector2(pos.x - 1, pos.y - 1),
+                new Vector2(pos.x + CharWidth, pos.y + height),
+                ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f))
+            );
+            drawList.AddRect(
+                new Vector2(pos.x - 2, pos.y - 2),
+                new Vector2(pos.x + 1 + CharWidth, pos.y + height + 1),
+                ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f))
+            );
+        }
+    }
+
 }
 
 public class EditorTab
@@ -1004,6 +1203,28 @@ public class EditorTab
     {
         Editors[0].Save();
     }
+
+    public void Draw(float availHeight)
+    {
+        ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
+        int n = Editors.Count;
+        var p0 = ImGui.GetCursorScreenPos();
+        var avail = ImGui.GetContentRegionAvail();
+        var spacing = ImGui.GetStyle().ItemSpacing.x;
+        avail.y = availHeight;
+        avail.x = avail.x / n - spacing * (n - 1) / n;
+        for (int i = 0; i < n; i++)
+        {
+            var editor = Editors[i];
+            editor.Update();
+            editor.Draw(p0, avail, $"##editorpane{i}");
+            if (i < n - 1)
+                ImGui.SameLine();
+            p0.x += avail.x + spacing;
+        }
+        ImGui.PopFont();
+        ImGui.SetCursorScreenPos(new Vector2(p0.x, p0.y + avail.y + ImGui.GetStyle().ItemSpacing.y));
+    }
 }
 
 public class EditorWindow
@@ -1018,6 +1239,11 @@ public class EditorWindow
     private int _activeEditorIndex = 0;
     public EditorTab ActiveTab => Tabs[_activeTabIndex];
     public Editor ActiveEditor => ActiveTab[_activeEditorIndex];
+
+    public void SetActiveEditor(int editorIndex)
+    {
+        _activeEditorIndex = Mathf.Clamp(editorIndex, 0, ActiveTab.Editors.Count - 1);
+    }
 
     public EditorTab MotherboardTab => Tabs[0];
 
@@ -1038,6 +1264,8 @@ public class EditorWindow
     {
         KeyHandler = new KeyHandler(this);
         Tabs.Add(new EditorTab(new Editor(KeyHandler, pcm), "Motherboard"));
+        Tabs[0].AddEditor(new Editor(KeyHandler));
+        Tabs[0][0].ResetCode("abc\ndef\nghi");
     }
 
     private bool Show = false;
@@ -1476,6 +1704,8 @@ public class EditorWindow
     public bool EnforceLineLimit => IsMotherboard && Settings.EnforceLineLimit;
     public bool EnforceByteLimit => IsMotherboard && Settings.EnforceByteLimit;
 
+    public float FooterHeight => 2 * ImGui.GetTextLineHeightWithSpacing() + 2 * ImGui.GetStyle().FramePadding.y;
+
     public void DrawFooter()
     {
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5.0f);
@@ -1574,161 +1804,6 @@ public class EditorWindow
         ImGui.PopStyleVar();
     }
 
-    private Vector2 _textAreaOrigin,
-        _textAreaSize;
-    private float _scrollY = 0.0f;
-
-    public bool IsMouseInsideTextArea()
-    {
-        Vector2 mousePos = ImGui.GetMousePos();
-        float px = _textAreaOrigin.x;
-        float py = _textAreaOrigin.y + _scrollY - ImGui.GetStyle().FramePadding.y;
-        return mousePos.x >= px
-            && mousePos.x <= px + _textAreaSize.x
-            && mousePos.y >= py
-            && mousePos.y <= py + _textAreaSize.y;
-    }
-
-    private Vector2 _caretPixelPos;
-
-    public unsafe void DrawCodeArea()
-    {
-        ActiveTab[0].Update();
-        ActiveTab[0].CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
-        var padding = ImGui.GetStyle().FramePadding;
-        float scrollHeight =
-            ImGui.GetContentRegionAvail().y
-            - 2 * ImGui.GetTextLineHeightWithSpacing()
-            - 2 * padding.y;
-        ImGui.BeginChild("ScrollRegion", new Vector2(0, scrollHeight), true);
-        _textAreaOrigin = ImGui.GetCursorScreenPos();
-        _textAreaSize = ImGui.GetContentRegionAvail() + 2 * padding;
-
-        var linePos = _textAreaOrigin;
-        linePos.x += 4.3f * CharWidth;
-        ImGui
-            .GetWindowDrawList()
-            .AddLine(
-                linePos,
-                new Vector2(linePos.x, linePos.y + LineHeight * Lines.Count),
-                ICodeFormatter.ColorLineNumber,
-                1.5f
-            );
-
-        ImGuiListClipperPtr clipper = new ImGuiListClipperPtr(
-            ImGuiNative.ImGuiListClipper_ImGuiListClipper()
-        );
-
-        clipper.Begin(Lines.Count);
-
-        Vector2 mousePos = ImGui.GetMousePos();
-
-        if (ActiveTab[0].ScrollToCaret > 0)
-        {
-            float lineHeight = LineHeight;
-            float lineSpacing = ImGui.GetStyle().ItemSpacing.y;
-
-            float pageHeight = (Lines.Count * lineHeight) - ImGui.GetScrollMaxY();
-            float scrollY = ImGui.GetScrollY();
-            float viewTop = _scrollY;
-            float viewBottom = _scrollY + pageHeight;
-
-            float caretTop = CaretLine * lineHeight;
-            float caretBottom = caretTop + lineHeight;
-
-            if (caretTop < viewTop)
-            {
-                scrollY = caretTop;
-            }
-            else if (caretBottom > viewBottom)
-            {
-                scrollY = caretBottom - pageHeight + lineSpacing;
-            }
-
-            ImGui.SetScrollY(Math.Min(scrollY, ImGui.GetScrollMaxY()));
-            ActiveTab[0].ScrollToCaret -= 1;
-        }
-
-        _scrollY = ImGui.GetScrollY();
-
-        _firstLineIndex = -1;
-
-        var selection = Selection.Sorted();
-        while (clipper.Step())
-        {
-            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-            {
-                var pos = ImGui.GetCursorScreenPos();
-                ActiveTab[0].CodeFormatter.DrawLine(i, selection);
-
-                if (i == CaretLine)
-                {
-                    _caretPixelPos = pos;
-                    _caretPixelPos.x +=
-                        CharWidth * (CaretCol + ICodeFormatter.LineNumberOffset);
-                    DrawCaret(_caretPixelPos);
-                }
-                if (_firstLineIndex == -1)
-                {
-                    _firstLineIndex = i;
-                    _firstLineY = pos.y;
-                }
-                pos.y += LineHeight;
-                ImGui.SetCursorScreenPos(pos);
-                // ImGui.NewLine();
-            }
-        }
-
-        if (EnableAutoComplete)
-        {
-            var completePos = _caretPixelPos + new Vector2(0, 1.5f * LineHeight);
-            ImGui.SetCursorScreenPos(_caretPixelPos);
-            ActiveTab[0].CodeFormatter.DrawAutocomplete(completePos);
-        }
-
-        clipper.End();
-        ImGui.EndChild();
-    }
-
-    public void DrawCaret(Vector2 pos)
-    {
-        var drawList = ImGui.GetWindowDrawList();
-        var height = LineHeight;
-        if (LineSpacingOffset < 0)
-        {
-            height = height - LineSpacingOffset;
-            pos.y -= LineSpacingOffset / 2;
-        }
-
-        if (KeyHandler.Mode == KeyMode.Insert)
-        {
-            bool blinkOn = ((int)((ImGui.GetTime() - ActiveTab[0].TimeLastAction) * 2) % 2) == 0;
-            if (blinkOn)
-            {
-                drawList.AddLine(
-                    pos,
-                    new Vector2(pos.x, pos.y + height),
-                    ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, 1)),
-                    1.5f
-                );
-            }
-        }
-        else
-        {
-            // Draw a block cursor
-            drawList.AddRect(
-                new Vector2(pos.x - 1, pos.y - 1),
-                new Vector2(pos.x + CharWidth, pos.y + height),
-                ImGui.ColorConvertFloat4ToU32(new Vector4(0.7f, 0.7f, 0.7f, 1.0f))
-            );
-            drawList.AddRect(
-                new Vector2(pos.x - 2, pos.y - 2),
-                new Vector2(pos.x + 1 + CharWidth, pos.y + height + 1),
-                ImGui.ColorConvertFloat4ToU32(new Vector4(0f, 0f, 0f, 1.0f))
-            );
-        }
-    }
-
     private bool _hasFocus = false;
     private int _openGameWindows = 0;
     private Vector2 _windowPos = new Vector2(100, 100);
@@ -1750,15 +1825,6 @@ public class EditorWindow
 
     private Queue<double> _renderTimes = new();
     private System.Diagnostics.Stopwatch _renderStopwatch;
-
-    public void DrawEditor()
-    {
-        ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
-        _windowPos = ImGui.GetWindowPos();
-
-        DrawCodeArea();
-        ImGui.PopFont();
-    }
 
     public void Draw()
     {
@@ -1807,6 +1873,7 @@ public class EditorWindow
         ImGui.GetStyle().Colors[(int)ImGuiCol.Tab] = new Vector4(0.2f, 0.2f, 0.2f, 1.0f);
 
         ImGui.SetWindowFontScale(Scale);
+        _windowPos = ImGui.GetWindowPos();
         UpdateTextSize();
         DrawHeader();
 
@@ -1830,7 +1897,7 @@ public class EditorWindow
                 {
                     if (ImGui.IsItemClicked(ImGuiMouseButton.Middle))
                         CloseTab(i);
-                    DrawEditor();
+                    tab.Draw(ImGui.GetContentRegionAvail().y - FooterHeight);
                     ImGui.EndTabItem();
                 }
                 if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
@@ -1850,17 +1917,18 @@ public class EditorWindow
         ImGui.End();
         ImGui.PopStyleColor();
 
-        if (_hasFocus && !IsLibrarySearchVisible && IsMouseInsideTextArea())
-        {
-            ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
-            if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
-            {
-                var pos = GetTextPositionFromMouse(false);
-                if (pos)
-                    ActiveTab[0].CodeFormatter.DrawTooltip(ImGui.GetMousePos());
-            }
-            ImGui.PopFont();
-        }
+        // TODO: Tooltip 
+        // if (_hasFocus && !IsLibrarySearchVisible && IsMouseInsideTextArea())
+        // {
+        //     ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
+        //     if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
+        //     {
+        //         var pos = GetTextPositionFromMouse(false);
+        //         if (pos)
+        //             ActiveTab[0].CodeFormatter.DrawTooltip(ImGui.GetMousePos());
+        //     }
+        //     ImGui.PopFont();
+        // }
 
         DrawHelpWindow();
         DrawDebugWindow();
@@ -2061,22 +2129,22 @@ public class EditorWindow
         maxRenderTime = (maxRenderTime * 1000000.0);
 
         ImGui.Text($"Render Time: {avgRenderTime:F0} us avg, {maxRenderTime:F0} us max");
-        ImGui.Text($"ScrollY: {_scrollY:F2}");
-        ImGui.Text(
-            $"Textpos: {_textAreaOrigin.x:F2}, {_textAreaOrigin.y:F2}, {_textAreaOrigin.y + _scrollY:F2}"
-        );
-        ImGui.Text($"Textsize: {_textAreaSize.x:F2}, {_textAreaSize.y:F2}");
-        ImGui.Text($"Windowpos: {_windowPos.x:F2}, {_windowPos.y:F2}");
-        ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
-        ImGui.Text($"MousePos: {ImGui.GetMousePos().x:F2}, {ImGui.GetMousePos().y:F2}");
-        ImGui.Text(
-            $"Mouse relative to text area: {ImGui.GetMousePos().x - _textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (_textAreaOrigin.y + _scrollY):F2}"
-        );
-        ImGui.Text($"Mouse caret pos: {GetTextPositionFromMouse(false)}");
-        ImGui.Text(
-            $"Mouse line: {(ImGui.GetMousePos().y - _textAreaOrigin.y) / LineHeight:F2}"
-        );
-        ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
+        // ImGui.Text($"ScrollY: {_scrollY:F2}");
+        // ImGui.Text(
+        //     $"Textpos: {_textAreaOrigin.x:F2}, {_textAreaOrigin.y:F2}, {_textAreaOrigin.y + _scrollY:F2}"
+        // );
+        // ImGui.Text($"Textsize: {_textAreaSize.x:F2}, {_textAreaSize.y:F2}");
+        // ImGui.Text($"Windowpos: {_windowPos.x:F2}, {_windowPos.y:F2}");
+        // ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
+        // ImGui.Text($"MousePos: {ImGui.GetMousePos().x:F2}, {ImGui.GetMousePos().y:F2}");
+        // ImGui.Text(
+        //     $"Mouse relative to text area: {ImGui.GetMousePos().x - _textAreaOrigin.x:F2}, {ImGui.GetMousePos().y - (_textAreaOrigin.y + _scrollY):F2}"
+        // );
+        // ImGui.Text($"Mouse caret pos: {GetTextPositionFromMouse(false)}");
+        // ImGui.Text(
+        //     $"Mouse line: {(ImGui.GetMousePos().y - _textAreaOrigin.y) / LineHeight:F2}"
+        // );
+        // ImGui.Text($"CaretPixelPos: {_caretPixelPos.x:F2}, {_caretPixelPos.y:F2}");
         // ImGui.Text($"Autocomplete suggestion: {CodeFormatter.GetAutocompleteSuggestion()}");
         ImGui.Text($"Font w/h: {CharWidth:F2}, {LineHeight:F2}");
 
@@ -2091,27 +2159,4 @@ public class EditorWindow
         ImGui.Separator();
     }
 
-    private int _firstLineIndex = -1;
-    private float _firstLineY = -1.0f;
-
-    public TextPosition GetTextPositionFromMouse(bool clampToTextArea = true)
-    {
-        Vector2 mousePos = ImGui.GetMousePos();
-
-        int line =
-            (int)((mousePos.y + LineSpacing - _firstLineY) / LineHeight) + _firstLineIndex;
-        int column = (int)(
-            (mousePos.x - _textAreaOrigin.x) / CharWidth - ICodeFormatter.LineNumberOffset
-        );
-
-        if (!clampToTextArea && (line < 0 || line >= Lines.Count))
-        {
-            return new TextPosition(-1, -1);
-        }
-
-        line = Mathf.Clamp(line, 0, Lines.Count - 1);
-        column = Mathf.Clamp(column, 0, Lines[line].Length);
-
-        return new TextPosition(line, column);
-    }
 }
