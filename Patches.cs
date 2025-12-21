@@ -50,7 +50,7 @@ public static class IC10EditorPatches
         EditorWindow.UseNativeEditor = false;
         var editor = GetEditor(InputSourceCode.Instance.PCM);
         editor.SetTitle(title);
-        editor.MotherboardTab.ResetCode(defaultText);
+        editor.MotherboardTab[0].ResetCode(defaultText);
         editor.ShowWindow();
         defaultText = "__IC10PLACEHOLDER__"; // The editor causes lag for large code, so don't paste it now
     }
@@ -111,7 +111,7 @@ public static class IC10EditorPatches
 
         // See the patch for ShowInputPanel - we set a placeholder value there
         if (value != "__IC10PLACEHOLDER__")
-            GetEditor(InputSourceCode.Instance.PCM).MotherboardTab.ResetCode(value);
+            GetEditor(InputSourceCode.Instance.PCM).MotherboardTab[0].ResetCode(value);
 
         return false;
     }

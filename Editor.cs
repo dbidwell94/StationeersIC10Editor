@@ -2,7 +2,6 @@ namespace StationeersIC10Editor;
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
 using Assets.Scripts;
@@ -183,7 +182,7 @@ public static class Settings
     }
 }
 
-public class IEditor
+public class Editor
 {
     public object Target;
     public string Title = "Motherboard";
@@ -197,6 +196,7 @@ public class IEditor
 
     public bool HaveSelection => (bool)Selection;
     public KeyHandler KeyHandler;
+    public bool IsReadOnly = false;
 
     public TextPosition _caretPos;
 
@@ -216,7 +216,7 @@ public class IEditor
 
     public ConfirmWindow _confirmWindow = null;
 
-    public IEditor(KeyHandler keyHandler, object target = null)
+    public Editor(KeyHandler keyHandler, object target = null)
     {
         Target = target;
         KeyHandler = keyHandler;
@@ -978,35 +978,66 @@ public class IEditor
     }
 }
 
+public class EditorTab
+{
+    public List<Editor> Editors;
+    public string Title;
+
+    public EditorTab(Editor editor, string title)
+    {
+        Editors = new List<Editor> { editor };
+        Title = title;
+    }
+
+    public int AddEditor(Editor editor)
+    {
+        Editors.Add(editor);
+        return Editors.Count - 1;
+    }
+
+    public Editor this[int index]
+    {
+        get { return Editors[index]; }
+    }
+
+    public void Save()
+    {
+        Editors[0].Save();
+    }
+}
+
 public class EditorWindow
 {
     public KeyMode KeyMode;
     public static bool UseNativeEditor = false;
     KeyHandler KeyHandler;
 
-    public List<IEditor> Tabs = new List<IEditor>();
+    public List<EditorTab> Tabs = new List<EditorTab>();
 
     private int _activeTabIndex = 0;
-    public IEditor ActiveTab => Tabs[_activeTabIndex];
-    public IEditor MotherboardTab => Tabs[0];
+    private int _activeEditorIndex = 0;
+    public EditorTab ActiveTab => Tabs[_activeTabIndex];
+    public Editor ActiveEditor => ActiveTab[_activeEditorIndex];
 
-    public List<StyledLine> Lines => ActiveTab.Lines;
-    public string Code => ActiveTab.Code;
-    public int CaretLine => ActiveTab.CaretLine;
-    public int CaretCol => ActiveTab.CaretCol;
-    public TextPosition CaretPos => ActiveTab.CaretPos;
+    public EditorTab MotherboardTab => Tabs[0];
 
-    public TextRange Selection => ActiveTab.Selection;
+    public List<StyledLine> Lines => ActiveEditor.Lines;
+    public string Code => ActiveEditor.Code;
+    public int CaretLine => ActiveEditor.CaretLine;
+    public int CaretCol => ActiveEditor.CaretCol;
+    public TextPosition CaretPos => ActiveEditor.CaretPos;
 
-    bool LimitExceeded => ActiveTab.LimitExceeded;
-    string CommandStatus => ActiveTab.CommandStatus;
+    public TextRange Selection => ActiveEditor.Selection;
+
+    bool LimitExceeded => ActiveTab[0].LimitExceeded;
+    string CommandStatus => ActiveTab[0].CommandStatus;
 
     private string Title = "IC10 Editor";
 
     public EditorWindow(ProgrammableChipMotherboard pcm)
     {
         KeyHandler = new KeyHandler(this);
-        Tabs.Add(new IEditor(KeyHandler, pcm));
+        Tabs.Add(new EditorTab(new Editor(KeyHandler, pcm), "Motherboard"));
     }
 
     private bool Show = false;
@@ -1100,7 +1131,7 @@ public class EditorWindow
 
             // if (ImGui.Button("Create new"))
             // {
-            //     var editor = new IEditor(KeyHandler);
+            //     var editor = new Editor(KeyHandler);
             //     editor.Title = _librarySearchText;
             //     editor.ResetCode("");
             //     Tabs.Add(editor);
@@ -1231,10 +1262,9 @@ public class EditorWindow
         if (lib == null)
             return;
 
-        var editor = new IEditor(KeyHandler, lib);
-        editor.Title = lib.Title;
+        var editor = new Editor(KeyHandler, lib);
         editor.ResetCode(lib.Instructions);
-        Tabs.Add(editor);
+        Tabs.Add(new EditorTab(editor, lib.Title));
         _activeTabIndex = Tabs.Count - 1;
     }
 
@@ -1246,14 +1276,14 @@ public class EditorWindow
         // localPosition was set to -10000,-10000,0 to hide the native editor, so set it back to 0,0,0 to show it
         InputSourceCode.Instance.Window.localPosition = new Vector3(0, 0, 0);
         KeyManager.RemoveInputState("ic10editorinputstate");
-        InputSourceCode.Paste(MotherboardTab.Code);
+        InputSourceCode.Paste(MotherboardTab[0].Code);
     }
 
     public void Confirm()
     {
         if (LimitExceeded)
         {
-            ActiveTab.CommandStatus = LimitExceededMessage;
+            ActiveTab[0].CommandStatus = LimitExceededMessage;
             return;
         }
         ActiveTab.Save();
@@ -1268,16 +1298,16 @@ public class EditorWindow
         {
             if (LimitExceeded)
             {
-                ActiveTab.CommandStatus = LimitExceededMessage;
+                ActiveTab[0].CommandStatus = LimitExceededMessage;
                 return;
             }
             Confirm();
-            MotherboardTab.PCM.Export();
+            MotherboardTab[0].PCM.Export();
         }
         else
         {
             // Apply code to motherboard tab
-            MotherboardTab.ResetCode(ActiveTab.Code);
+            MotherboardTab[0].ResetCode(ActiveEditor.Code);
             _activeTabIndex = 0;
         }
     }
@@ -1350,7 +1380,7 @@ public class EditorWindow
         ImGui.SameLine();
 
         if (ImGui.Button("Clear", buttonSize))
-            ActiveTab.ClearCode();
+            ActiveTab[0].ClearCode();
 
         ImGui.SameLine();
 
@@ -1361,8 +1391,8 @@ public class EditorWindow
 
         if (ImGui.Button("Paste", buttonSize))
         {
-            ActiveTab.ClearCode();
-            ActiveTab.Insert(GameManager.Clipboard);
+            ActiveTab[0].ClearCode();
+            ActiveTab[0].Insert(GameManager.Clipboard);
         }
 
         ImGui.SameLine();
@@ -1391,7 +1421,7 @@ public class EditorWindow
         );
 
         var formatters = CodeFormatters.FormatterNames;
-        var formatter = ActiveTab.CodeFormatter;
+        var formatter = ActiveTab[0].CodeFormatter;
 
         ImGui.PushItemWidth(comboWidth);
         if (ImGui.BeginCombo("##CodeFormat", formatter.Name))
@@ -1401,10 +1431,10 @@ public class EditorWindow
                 bool isSelected = fmt == formatter.Name;
                 if (ImGui.Selectable(fmt, isSelected))
                 {
-                    var code = ActiveTab.Code;
-                    ActiveTab.CodeFormatter = CodeFormatters.GetFormatter(fmt);
-                    ActiveTab.CodeFormatter.Editor = ActiveTab;
-                    ActiveTab.CodeFormatter.ResetCode(code);
+                    var code = ActiveTab[0].Code;
+                    ActiveTab[0].CodeFormatter = CodeFormatters.GetFormatter(fmt);
+                    ActiveTab[0].CodeFormatter.Editor = ActiveTab[0];
+                    ActiveTab[0].CodeFormatter.ResetCode(code);
                 }
                 if (isSelected)
                     ImGui.SetItemDefaultFocus();
@@ -1442,7 +1472,7 @@ public class EditorWindow
     private static uint _colorBad = ICodeFormatter.ColorFromHTML("red");
     private static uint _colorDefault = ICodeFormatter.ColorFromHTML("white");
 
-    public bool IsMotherboard => ActiveTab.PCM != null;
+    public bool IsMotherboard => ActiveTab[0].PCM != null;
     public bool EnforceLineLimit => IsMotherboard && Settings.EnforceLineLimit;
     public bool EnforceByteLimit => IsMotherboard && Settings.EnforceByteLimit;
 
@@ -1529,7 +1559,7 @@ public class EditorWindow
         else
         {
             if (ImGui.Button("Save", buttonSize))
-                KeyHandler.CommandStatus = ActiveTab.Save();
+                KeyHandler.CommandStatus = ActiveTab[0].Save();
         }
 
         if (LimitExceeded)
@@ -1539,7 +1569,7 @@ public class EditorWindow
         }
 
         KeyHandler.DrawStatus();
-        ActiveTab.CodeFormatter.DrawStatus(ImGui.GetCursorScreenPos());
+        ActiveTab[0].CodeFormatter.DrawStatus(ImGui.GetCursorScreenPos());
 
         ImGui.PopStyleVar();
     }
@@ -1563,8 +1593,8 @@ public class EditorWindow
 
     public unsafe void DrawCodeArea()
     {
-        ActiveTab.Update();
-        ActiveTab.CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
+        ActiveTab[0].Update();
+        ActiveTab[0].CodeFormatter.Update(CaretPos, ImGui.GetMousePos(), GetTextPositionFromMouse(false));
         var padding = ImGui.GetStyle().FramePadding;
         float scrollHeight =
             ImGui.GetContentRegionAvail().y
@@ -1593,7 +1623,7 @@ public class EditorWindow
 
         Vector2 mousePos = ImGui.GetMousePos();
 
-        if (ActiveTab.ScrollToCaret > 0)
+        if (ActiveTab[0].ScrollToCaret > 0)
         {
             float lineHeight = LineHeight;
             float lineSpacing = ImGui.GetStyle().ItemSpacing.y;
@@ -1616,7 +1646,7 @@ public class EditorWindow
             }
 
             ImGui.SetScrollY(Math.Min(scrollY, ImGui.GetScrollMaxY()));
-            ActiveTab.ScrollToCaret -= 1;
+            ActiveTab[0].ScrollToCaret -= 1;
         }
 
         _scrollY = ImGui.GetScrollY();
@@ -1629,7 +1659,7 @@ public class EditorWindow
             for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
             {
                 var pos = ImGui.GetCursorScreenPos();
-                ActiveTab.CodeFormatter.DrawLine(i, selection);
+                ActiveTab[0].CodeFormatter.DrawLine(i, selection);
 
                 if (i == CaretLine)
                 {
@@ -1653,7 +1683,7 @@ public class EditorWindow
         {
             var completePos = _caretPixelPos + new Vector2(0, 1.5f * LineHeight);
             ImGui.SetCursorScreenPos(_caretPixelPos);
-            ActiveTab.CodeFormatter.DrawAutocomplete(completePos);
+            ActiveTab[0].CodeFormatter.DrawAutocomplete(completePos);
         }
 
         clipper.End();
@@ -1672,7 +1702,7 @@ public class EditorWindow
 
         if (KeyHandler.Mode == KeyMode.Insert)
         {
-            bool blinkOn = ((int)((ImGui.GetTime() - ActiveTab.TimeLastAction) * 2) % 2) == 0;
+            bool blinkOn = ((int)((ImGui.GetTime() - ActiveTab[0].TimeLastAction) * 2) % 2) == 0;
             if (blinkOn)
             {
                 drawList.AddLine(
@@ -1814,8 +1844,8 @@ public class EditorWindow
         DrawFooter();
         DrawLibrarySearchWindow();
 
-        if (ActiveTab._confirmWindow != null)
-            ActiveTab._confirmWindow.Draw();
+        if (ActiveTab[0]._confirmWindow != null)
+            ActiveTab[0]._confirmWindow.Draw();
 
         ImGui.End();
         ImGui.PopStyleColor();
@@ -1827,7 +1857,7 @@ public class EditorWindow
             {
                 var pos = GetTextPositionFromMouse(false);
                 if (pos)
-                    ActiveTab.CodeFormatter.DrawTooltip(ImGui.GetMousePos());
+                    ActiveTab[0].CodeFormatter.DrawTooltip(ImGui.GetMousePos());
             }
             ImGui.PopFont();
         }

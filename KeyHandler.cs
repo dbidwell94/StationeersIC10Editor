@@ -139,7 +139,7 @@ public class VimCommand
         }
     }
 
-    public TextRange CaretAfterMove(IEditor ed)
+    public TextRange CaretAfterMove(Editor ed)
     {
         var startPos = ed.CaretPos;
         var pos = ed.CaretPos;
@@ -236,7 +236,7 @@ public class VimCommand
         return ed.Clamp(new TextRange(startPos, pos));
     }
 
-    public string Execute(IEditor editor)
+    public string Execute(Editor editor)
     {
         TextRange range;
         if (editor.HaveSelection)
@@ -450,7 +450,7 @@ public class KeyHandler
     public Action<string> OnKeyPressed = delegate { };
 
     public EditorWindow Window;
-    public IEditor Editor => Window.ActiveTab;
+    public Editor Editor => Window.ActiveEditor;
 
     public KeyMode Mode
     {
@@ -644,7 +644,7 @@ public class KeyHandler
                 CaretPos = new TextPosition(0, 0);
 
             if (Input.GetKeyDown(KeyCode.End))
-                CaretPos = new TextPosition(Window.ActiveTab.Lines.Count - 1, Window.ActiveTab.Lines[Window.ActiveTab.Lines.Count - 1].Length);
+                CaretPos = new TextPosition(Editor.Lines.Count - 1, Editor.Lines[Editor.Lines.Count - 1].Length);
 
             for (int i = 0; i <= 9; i++)
                 if (Input.GetKeyDown(KeyCode.Alpha0 + i))
