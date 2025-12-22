@@ -344,6 +344,7 @@ public class IC10CodeFormatter : StaticFormatter
 
     public override void ResetCode(string code)
     {
+        types.Clear();
         defines.Clear();
         regAliases.Clear();
         devAliases.Clear();
