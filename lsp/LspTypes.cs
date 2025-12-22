@@ -1,3 +1,5 @@
+using Newtonsoft.Json;
+
 namespace ImGuiEditor.LSP;
 
 public class TextDocumentIdentifier
@@ -42,7 +44,8 @@ public class Position
         line = 0;
         character = 0;
     }
-    public Position(StationeersIC10Editor.TextPosition p) {
+    public Position(StationeersIC10Editor.TextPosition p)
+    {
         line = p.Line;
         character = p.Col;
     }
@@ -54,6 +57,7 @@ public class TextDocumentContentChangeEvent
 {
     public string text { get; set; } = string.Empty;
 
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public Range? range { get; set; }
 }
 

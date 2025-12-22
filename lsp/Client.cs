@@ -110,7 +110,16 @@ public class LspClient
             {
                 // venvPath = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv"),
                 // venv = "venv",
-                pythonPath = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Scripts", "python.exe"),
+                python = new
+                {
+                    pythonPath = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Scripts", "python.exe"),
+                    // pythonVersion = "3.14",
+                    extraPaths = new string[] {
+                        // Add any extra paths needed for the LSP server here
+                        Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv", "Lib", "site-packages")
+
+                    }
+                }
                 // pythonVersion = "3.14",
                 //         extraPaths = new string[] {
                 //             // Add any extra paths needed for the LSP server here
@@ -120,40 +129,40 @@ public class LspClient
 
             },
 
-            capabilities = new { },
-            // {
-            //     workspace = new
-            //     {
-            //         workspaceFolders = true
-            //     },
-            //     textDocument = new
-            //     {
-            //         synchronization = new
-            //         {
-            //             didSave = true,
-            //             willSave = false,
-            //             willSaveWaitUntil = false,
-            //             dynamicRegistration = false
-            //         },
-            //         completion = new
-            //         {
-            //             completionItem = new
-            //             {
-            //                 snippetSupport = false
-            //             }
-            //         },
-            //         publishDiagnostics = new
-            //         {
-            //             relatedInformation = true,
-            //             dataSupport = true,
-            //             versionSupport = true
-            //         }
-            //     }
-            // },
+            capabilities = new
+            {
+                workspace = new
+                {
+                    workspaceFolders = true
+                },
+                textDocument = new
+                {
+                    synchronization = new
+                    {
+                        didSave = true,
+                        willSave = false,
+                        willSaveWaitUntil = false,
+                        dynamicRegistration = false
+                    },
+                    completion = new
+                    {
+                        completionItem = new
+                        {
+                            snippetSupport = false
+                        }
+                    },
+                    publishDiagnostics = new
+                    {
+                        relatedInformation = true,
+                        dataSupport = true,
+                        versionSupport = true
+                    }
+                }
+            },
 
             workspaceFolders = new[]
     {
-        new { uri = rootUri, name = "IC10Workspace" }
+        new { uri = rootUri, name = "ws" }
     }
         };
 
@@ -228,7 +237,12 @@ public class LspClient
             id = id,
             method = method,
             @params = @params
-        });
+        },
+            new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore
+            }
+        );
 
         // Fire and forget (errors are surfaced via tcs / read loop)
         Task.Run(() => SendMessageAsync(json, ignoreInitialized));
@@ -396,6 +410,10 @@ public class LspClient
 
     public async void OpenDocument(string uri, string languageId, string text)
     {
+        L.Info($"LSP Formatter using file URI: {uri}");
+        Directory.CreateDirectory(Path.GetDirectoryName(uri));
+        File.WriteAllText(uri, text);
+
         var openParams = new DidOpenTextDocumentParams
         {
             textDocument = new TextDocumentItem
@@ -554,25 +572,39 @@ public class LspClient
         return new List<SemanticToken>();
     }
 
+    public Process _process1;
 
-
-    public static LspClient StartPyrightLSPServer()
+    public static LspClient StartBasedPyrightLSPServer()
     {
-        string workingDir = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "venv");
-        string PyRightExe = Path.Combine(workingDir, "Scripts", "basedpyright-langserver.exe");
-        string SiteDir = Path.Combine(workingDir, "Lib", "site-packages");
+        // open a socket and listen
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        StationeersIC10Editor.L.Info("BasedPyright LSP server listening on port " + port);
+
+        var lspClient = new LspClient();
+
+        UniTask.RunOnThreadPool(async () =>
+        {
+            var client = await listener.AcceptTcpClientAsync();
+            StationeersIC10Editor.L.Info("BasedPyright LSP server accepted connection.");
+            // get stream
+            var stream = client.GetStream();
+            lspClient.Init(stream, stream);
+        }).Forget();
+
+
+        string workingDir = Path.Combine(BepInEx.Paths.CachePath, "pytrapic");
+        // string PyRightExe = Path.Combine(workingDir, ".venv", "Scripts", "basedpyright-langserver.exe");
+        string SiteDir = Path.Combine(workingDir, "venv", "Lib", "site-packages");
         string NodeExe = Path.Combine(SiteDir, "nodejs_wheel", "node.exe");
         string PyRightJS = Path.Combine(SiteDir, "basedpyright", "langserver.index.js");
-        string Args = $"/c {PyRightExe} --no-warnings --title \"abc\" --stdio";
-        string NodeArgs = PyRightJS + " " + Args;
+        string Args = $"{PyRightJS} --no-warnings --title \"abc\" --verbose --socket={port}";
         // string Args = "--stdio";
         var startInfo = new ProcessStartInfo
         {
-            FileName = "cmd.exe",
-            // FileName = PyRightExe,
+            FileName = NodeExe,
             Arguments = Args,
-            // FileName = NodeExe,
-            // Arguments = NodeArgs,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -581,40 +613,32 @@ public class LspClient
             WorkingDirectory = workingDir
         };
 
-        var info1 = new ProcessStartInfo
+        var process = new Process
         {
-            FileName = Path.Combine(workingDir, "Scripts", "basedpyright.exe"),
-            Arguments = "a.py --verbose",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = false,
-            WorkingDirectory = workingDir
+            StartInfo = startInfo,
+            EnableRaisingEvents = true
         };
 
-        // // start info1
-        // var process1 = new Process
-        // {
-        //     StartInfo = info1,
-        //     EnableRaisingEvents = true
-        // };
-        //
-        // // wait for rocess1 and print output
-        // process1.Start();
-        // string output1 = process1.StandardOutput.ReadToEnd();
-        // string error1 = process1.StandardError.ReadToEnd();
-        // process1.WaitForExit();
-        // StationeersIC10Editor.L.Info("Pyright test output: " + output1);
-        // StationeersIC10Editor.L.Info("Pyright test error: " + error1);
+        process.OutputDataReceived += (s, e) =>
+        {
+            if (e.Data != null)
+                File.AppendAllText("pr-stdout.log", e.Data + Environment.NewLine);
+        };
 
-        // startInfo.EnvironmentVariables["UV_THREADPOOL_SIZE"] = "1";
-        // startInfo.EnvironmentVariables["NODE_DISABLE_COLORS"] = "1";
-        // startInfo.EnvironmentVariables["UV_PROCESS_TITLE"] = "0";
+        process.ErrorDataReceived += (s, e) =>
+        {
+            if (e.Data != null)
+                File.AppendAllText("pr-stderr.log", e.Data + Environment.NewLine);
+        };
 
-        return new LspClientStdio(startInfo);
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        lspClient._process1 = process;
+
+        return lspClient;
     }
-
 }
 
 class LspClientStdio : LspClient, IDisposable

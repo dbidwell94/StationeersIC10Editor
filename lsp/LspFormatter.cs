@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using StationeersIC10Editor;
 
@@ -27,18 +28,22 @@ public class LSPFormatter : ICodeFormatter
     public LSPFormatter()
     // public LSPFormatter(LspClient lspClient)
     {
+        string uri = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "ws", "tmp.py");
+        uri = new Uri(uri).AbsoluteUri;
         Identifier = new VersionedTextDocumentIdentifier
         {
             // uri = new Uri(Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "ws", "a.py")).AbsoluteUri,
             // uri = "a.py",
-            uri = "memory://file",
+            // uri = "memory://file",
+            uri = uri,
             version = 1
         };
 
+        // write to file
         OnCodeChanged = (Action)Delegate.Combine(SubmitChanges, OnCodeChanged);
 
-        // LspClient = LspClient.StartPyrightLSPServer();
-        LspClient = new LspClientSocket("localhost", 9222);
+        LspClient = LspClient.StartBasedPyrightLSPServer();
+        // LspClient = new LspClientSocket("localhost", 9222);
         // LspClient = lspClient;
         LspClient.OnInfo += (msg) => L.Debug($"[LSP] {msg}");
         LspClient.OnError += (msg) => L.Debug($"[LSP] {msg}");
