@@ -214,7 +214,20 @@ public class Editor
     public List<StyledLine> Lines => CodeFormatter.Lines;
     public string CommandStatus = "";
 
+    public EditorTab ParentTab = null;
+
     public ConfirmWindow _confirmWindow = null;
+
+    public string FileName {
+        get {
+            if (IsMotherboard)
+                return $"motherboard_id_{PCM.ReferenceId}";
+            else if (InstructionData != null)
+                return InstructionData.Title.Trim().Replace(' ', '_').Replace('/', '_');
+            else
+                return "Untitled";
+        }
+    }
 
     public Editor(KeyHandler keyHandler, object target = null)
     {
@@ -1183,12 +1196,14 @@ public class EditorTab
 
     public EditorTab(Editor editor, string title)
     {
+        editor.ParentTab = this;
         Editors = new List<Editor> { editor };
         Title = title;
     }
 
     public int AddEditor(Editor editor)
     {
+        editor.ParentTab = this;
         Editors.Add(editor);
         return Editors.Count - 1;
     }
@@ -1263,8 +1278,6 @@ public class EditorWindow
     {
         KeyHandler = new KeyHandler(this);
         Tabs.Add(new EditorTab(new Editor(KeyHandler, pcm), "Motherboard"));
-        Tabs[0].AddEditor(new Editor(KeyHandler));
-        Tabs[0][0].ResetCode("abc\ndef\nghi");
     }
 
     private bool Show = false;

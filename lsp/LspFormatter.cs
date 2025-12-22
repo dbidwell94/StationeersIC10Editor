@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
 using StationeersIC10Editor;
 
@@ -10,45 +9,13 @@ public class LSPFormatter : ICodeFormatter
     protected VersionedTextDocumentIdentifier Identifier;
     protected LspClient LspClient;
     protected List<TextDocumentContentChangeEvent> _changes = new List<TextDocumentContentChangeEvent>();
-    protected PythonStaticFormatter StaticFormatter = new PythonStaticFormatter();
 
     protected bool _isOpen = false;
-
-    public static double MatchingScore(string input)
-    {
-        return 0;
-    }
 
     public int Version
     {
         get { return Identifier.version; }
         set { Identifier.version = value; }
-    }
-
-    public LSPFormatter()
-    // public LSPFormatter(LspClient lspClient)
-    {
-        string uri = Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "ws", "tmp.py");
-        uri = new Uri(uri).AbsoluteUri;
-        Identifier = new VersionedTextDocumentIdentifier
-        {
-            // uri = new Uri(Path.Combine(BepInEx.Paths.CachePath, "pytrapic", "ws", "a.py")).AbsoluteUri,
-            // uri = "a.py",
-            // uri = "memory://file",
-            uri = uri,
-            version = 1
-        };
-
-        // write to file
-        OnCodeChanged = (Action)Delegate.Combine(SubmitChanges, OnCodeChanged);
-
-        LspClient = LspClient.StartBasedPyrightLSPServer();
-        // LspClient = new LspClientSocket("localhost", 9222);
-        // LspClient = lspClient;
-        LspClient.OnInfo += (msg) => L.Debug($"[LSP] {msg}");
-        LspClient.OnError += (msg) => L.Debug($"[LSP] {msg}");
-        LspClient.OnDiagnostics += UpdateDiagnostics;
-        LspClient.OnInitialized += () => { SubmitChanges(); };
     }
 
     public int IncrementVersion()
@@ -90,7 +57,7 @@ public class LSPFormatter : ICodeFormatter
         }
     }
 
-    public void SubmitChanges()
+    public virtual void SubmitChanges()
     {
         L.Debug("Code changed, submitting changes to LSP");
         if (LspClient != null && _changes.Count > 0 && LspClient.IsInitialized)
@@ -225,11 +192,6 @@ public class LSPFormatter : ICodeFormatter
         // L.Debug($"Hover info at {pos.Line},{pos.Col}: {hover}");
         // var diag = await LspClient.RequestDiagnostics(Identifier);
         // L.Debug($"Received {diag} diagnostics from manual request");
-    }
-
-    public override StyledLine ParseLine(string line)
-    {
-        return StaticFormatter.ParseLine(line);
     }
 
     public override void ReplaceLine(int index, string newLine)

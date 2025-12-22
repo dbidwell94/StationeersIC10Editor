@@ -59,7 +59,12 @@ public abstract class ICodeFormatter
     public Action OnCodeChanged = () => { };
     public Action OnCaretMoved = () => { };
 
-    public abstract StyledLine ParseLine(string line);
+    public virtual StyledLine ParseLine(string line)
+    {
+        var sline = new StyledLine(line);
+        sline.Add(new Token(0, line, DefaultStyle));
+        return sline;
+    }
 
     public ICodeFormatter()
     {
