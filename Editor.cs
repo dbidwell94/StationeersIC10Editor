@@ -254,7 +254,7 @@ public class Editor
                 _caretPos.Line = Lines.Count - 1;
             if (_caretPos.Col < 0)
                 _caretPos.Col = 0;
-            if (_caretPos.Col > Lines[_caretPos.Line].Length)
+            if (Lines.Count > 0 && _caretPos.Col > Lines[_caretPos.Line].Length)
                 _caretPos.Col = Lines[_caretPos.Line].Length;
             ScrollToCaret += 1;
             _timeLastAction = ImGui.GetTime();
