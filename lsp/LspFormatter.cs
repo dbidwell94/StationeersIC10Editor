@@ -18,6 +18,10 @@ public class LSPFormatter : ICodeFormatter
         set { Identifier.version = value; }
     }
 
+    LSPFormatter() : base()
+    {
+    }
+
     public int IncrementVersion()
     {
         Identifier.version += 1;

@@ -1218,6 +1218,12 @@ public class EditorTab
         Editors[0].Save();
     }
 
+    public void ClearExtraEditors()
+    {
+        while (Editors.Count > 1)
+            Editors.RemoveAt(Editors.Count - 1);
+    }
+
     public void Draw(float availHeight)
     {
         ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
@@ -1675,6 +1681,7 @@ public class EditorWindow
                     ActiveTab[0].CodeFormatter = CodeFormatters.GetFormatter(fmt);
                     ActiveTab[0].CodeFormatter.Editor = ActiveTab[0];
                     ActiveTab[0].CodeFormatter.ResetCode(code);
+                    ActiveTab.ClearExtraEditors();
                 }
                 if (isSelected)
                     ImGui.SetItemDefaultFocus();

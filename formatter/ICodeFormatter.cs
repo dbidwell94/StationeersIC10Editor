@@ -434,7 +434,7 @@ public abstract class ICodeFormatter
         }
     }
 
-    public static string EncodeSource(string source)
+    public static string EncodeB64(string source)
     {
         if (string.IsNullOrEmpty(source))
             return "";
@@ -449,7 +449,7 @@ public abstract class ICodeFormatter
         }
     }
 
-    public static string DecodeSource(string source)
+    public static string DecodeB64(string source)
     {
         if (string.IsNullOrEmpty(source))
             return "";
@@ -464,5 +464,58 @@ public abstract class ICodeFormatter
 
             return Encoding.UTF8.GetString(outputStream.ToArray());
         }
+    }
+
+    public static string EncodeSource(string source, string tag, int wrapLength = 90)
+    {
+        if (!string.IsNullOrEmpty(tag))
+            tag += ": ";
+
+        var result = new StringBuilder();
+
+        var encoded = tag + EncodeB64(source);
+        int i = 0;
+        while (i < encoded.Length)
+        {
+            var chunk = encoded.Substring(i, Math.Min(90, encoded.Length - i));
+            result.Append("\n# " + chunk);
+            i += chunk.Length;
+        }
+        return result.ToString();
+    }
+
+    public static string ExtractEncodedSource(string code, string tag)
+    {
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(tag))
+        {
+            L.Debug("No code or tag provided for extraction.");
+            return "";
+        }
+
+        tag = "# " + tag + ": ";
+
+        if (!code.Contains(tag))
+        {
+            L.Debug("Tag not found in code for extraction.");
+            return "";
+        }
+
+        try
+        {
+            var parts = code.Split(
+                new string[] { tag },
+                System.StringSplitOptions.None
+            );
+
+            if (parts.Length >= 2)
+                return DecodeB64(parts[1].Replace("\n# ", "").Trim());
+        }
+        catch (Exception e)
+        {
+            L.Info($"Exception during extraction: {e}");
+        }
+
+        L.Debug("No encoded source found after tag for extraction.");
+        return "";
     }
 }
