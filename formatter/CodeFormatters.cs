@@ -54,7 +54,7 @@ public static class CodeFormatters
                 continue;
 
             double score = (double)method.Invoke(null, new object[] { input });
-            L.Info($"Formatter '{name}' has matching score {score} for input.");
+            L.Debug($"Formatter '{name}' has matching score {score} for input.");
 
             if (score > bestScore)
             {

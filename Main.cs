@@ -121,7 +121,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
         {
             L.SetLogger(this.Logger);
             this.Logger.LogInfo(
-                $"Awake ${PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}"
+                $"Awake {PluginName} {VersionInfo.VersionGit}, build time {VersionInfo.BuildTime}"
             );
             BindAllConfigs();
 
@@ -136,7 +136,7 @@ public class IC10EditorPlugin : BaseUnityPlugin
         catch (Exception ex)
         {
             this.Logger.LogError(
-                $"Error during ${PluginName} {VersionInfo.VersionGit} init: {ex}"
+                $"Error during {PluginName} {VersionInfo.VersionGit} init: {ex}"
             );
         }
     }

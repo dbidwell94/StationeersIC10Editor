@@ -289,7 +289,7 @@ public class IC10CodeFormatter : StaticFormatter
     {
         if (newToken != null)
         {
-            L.Info($"UpdateDataType: scheduling update for token {newToken}, defer={defer}");
+            L.Debug($"UpdateDataType: scheduling update for token {newToken}, defer={defer}");
             _tokensToUpdate.Add(newToken);
         }
         if (defer || _tokensToUpdate.Count == 0)

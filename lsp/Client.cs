@@ -179,7 +179,7 @@ public class LspClient
 
         _isInitialized.Set();
         OnInitialized();
-        L.Info("LSP Client is initialized.");
+        L.Debug("LSP Client is initialized.");
 
         return result;
     }
@@ -199,7 +199,7 @@ public class LspClient
         var bytes = Encoding.UTF8.GetBytes(json);
         var header = string.Format("Content-Length: {0}\r\n\r\n", bytes.Length);
 
-        L.Info("LSP Sending Message:\n" + header + json);
+        L.Debug("LSP Sending Message:\n" + header + json);
 
         var msgBuffer = new byte[header.Length + bytes.Length];
         Array.Copy(Encoding.ASCII.GetBytes(header), 0, msgBuffer, 0, header.Length);
@@ -289,7 +289,7 @@ public class LspClient
                 _recvBuffer.RemoveRange(0, fullLen);
 
                 string msg = Encoding.UTF8.GetString(bodyBytes, 0, contentLength);
-                // L.Info($"LSP Message Body: |{msg}|");
+                // L.Debug($"LSP Message Body: |{msg}|");
                 HandleIncomingMessage(msg);
             }
         }
@@ -333,7 +333,7 @@ public class LspClient
     {
         if (string.IsNullOrWhiteSpace(json))
             return;
-        L.Info("LSP Received Message:\n" + json);
+        L.Debug("LSP Received Message:\n" + json);
         JObject root;
 
         try
@@ -385,10 +385,10 @@ public class LspClient
         {
             // Notification
             var notifMethod = (string)root["method"];
-            L.Info("LSP Notification Method: " + notifMethod);
+            L.Debug("LSP Notification Method: " + notifMethod);
             if (notifMethod == "textDocument/publishDiagnostics")
             {
-                L.Info("LSP Received Diagnostics Notification.");
+                L.Debug("LSP Received Diagnostics Notification.");
                 var diagParams = root["params"].ToObject<PublishDiagnosticsParams>();
                 OnDiagnostics(diagParams);
                 return;
@@ -410,7 +410,7 @@ public class LspClient
 
     public async void OpenDocument(string uri, string languageId, string text)
     {
-        L.Info($"LSP Formatter using file URI: {uri}");
+        L.Debug($"LSP Formatter using file URI: {uri}");
         Directory.CreateDirectory(Path.GetDirectoryName(uri));
         File.WriteAllText(uri, text);
 
@@ -443,7 +443,7 @@ public class LspClient
 
     public async void ChangeDocument(VersionedTextDocumentIdentifier identifier, TextDocumentContentChangeEvent[] changes)
     {
-        L.Info($"LSP Changing document {identifier.uri} to version {identifier.version} with {changes.Length} changes.");
+        L.Debug($"LSP Changing document {identifier.uri} to version {identifier.version} with {changes.Length} changes.");
         var changeParams = new DidChangeTextDocumentParams
         {
             textDocument = identifier,
@@ -455,7 +455,7 @@ public class LspClient
 
     public async void ChangeDocumentFull(VersionedTextDocumentIdentifier identifier, string newText)
     {
-        L.Info($"LSP Changing document {identifier.uri} to version {identifier.version} with full text change.");
+        L.Debug($"LSP Changing document {identifier.uri} to version {identifier.version} with full text change.");
         var changes = new TextDocumentContentChangeEvent[]
         {
             new TextDocumentContentChangeEvent
@@ -580,14 +580,14 @@ public class LspClient
         var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
         listener.Start();
         int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        StationeersIC10Editor.L.Info("BasedPyright LSP server listening on port " + port);
+        StationeersIC10Editor.L.Debug("BasedPyright LSP server listening on port " + port);
 
         var lspClient = new LspClient();
 
         UniTask.RunOnThreadPool(async () =>
         {
             var client = await listener.AcceptTcpClientAsync();
-            StationeersIC10Editor.L.Info("BasedPyright LSP server accepted connection.");
+            StationeersIC10Editor.L.Debug("BasedPyright LSP server accepted connection.");
             // get stream
             var stream = client.GetStream();
             lspClient.Init(stream, stream);
@@ -647,20 +647,20 @@ class LspClientStdio : LspClient, IDisposable
 
     public LspClientStdio(ProcessStartInfo startInfo) : base()
     {
-        StationeersIC10Editor.L.Info("Starting LSP server...");
+        StationeersIC10Editor.L.Debug("Starting LSP server...");
         _process = new Process
         {
             StartInfo = startInfo,
             EnableRaisingEvents = true
         };
 
-        L.Info("Starting LSP server process...");
-        L.Info($"Executable: {_process.StartInfo.FileName}");
-        L.Info($"Arguments: {_process.StartInfo.Arguments}");
+        L.Debug("Starting LSP server process...");
+        L.Debug($"Executable: {_process.StartInfo.FileName}");
+        L.Debug($"Arguments: {_process.StartInfo.Arguments}");
 
         if (!_process.Start())
         {
-            L.Info("Failed to start LSP server process.");
+            L.Debug("Failed to start LSP server process.");
             throw new InvalidOperationException("Failed to start LSP server process.");
         }
 
@@ -670,10 +670,10 @@ class LspClientStdio : LspClient, IDisposable
 
         if (_process.HasExited)
         {
-            L.Info("LSP server process exited immediately after starting.");
-            L.Info($"Exit code: {_process.ExitCode}");
-            L.Info($"Error output: {_process.StandardError.ReadToEnd()}");
-            L.Info($"Output: {_process.StandardOutput.ReadToEnd()}");
+            L.Debug("LSP server process exited immediately after starting.");
+            L.Debug($"Exit code: {_process.ExitCode}");
+            L.Debug($"Error output: {_process.StandardError.ReadToEnd()}");
+            L.Debug($"Output: {_process.StandardOutput.ReadToEnd()}");
             throw new InvalidOperationException("LSP server process exited immediately after starting.");
         }
 
@@ -702,7 +702,7 @@ class LspClientSocket : LspClient, IDisposable
 
     public LspClientSocket(string host, int port) : base()
     {
-        StationeersIC10Editor.L.Info("Starting LSP server socket connection...");
+        StationeersIC10Editor.L.Debug("Starting LSP server socket connection...");
         _tcpClient = new System.Net.Sockets.TcpClient();
         StartAsync(host, port).Forget();
     }
