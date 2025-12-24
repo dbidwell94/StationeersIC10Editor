@@ -492,7 +492,7 @@ public abstract class ICodeFormatter
             return "";
         }
 
-        tag = "# " + tag + ": ";
+        tag = "# " + tag + ":";
 
         if (!code.Contains(tag))
         {
