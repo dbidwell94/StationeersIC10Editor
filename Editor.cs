@@ -218,8 +218,10 @@ public class Editor
 
     public ConfirmWindow _confirmWindow = null;
 
-    public string FileName {
-        get {
+    public string FileName
+    {
+        get
+        {
             if (IsMotherboard)
                 return $"motherboard_id_{PCM.ReferenceId}";
             else if (InstructionData != null)
@@ -1187,6 +1189,20 @@ public class Editor
         }
     }
 
+    public void DrawTooltip()
+    {
+        if (HasFocus && IsMouseInsideTextArea())
+        {
+            ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
+            if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
+            {
+                var pos = GetTextPositionFromMouse(false);
+                if (pos)
+                    CodeFormatter.DrawTooltip(ImGui.GetMousePos());
+            }
+            ImGui.PopFont();
+        }
+    }
 }
 
 public class EditorTab
@@ -1936,18 +1952,9 @@ public class EditorWindow
         ImGui.End();
         ImGui.PopStyleColor();
 
-        // TODO: Tooltip 
-        // if (_hasFocus && !IsLibrarySearchVisible && IsMouseInsideTextArea())
-        // {
-        //     ImGui.PushFont(ImGui.GetIO().Fonts.Fonts[0]);
-        //     if (KeyHandler.IsMouseIdle(TooltipDelay / 1000.0f))
-        //     {
-        //         var pos = GetTextPositionFromMouse(false);
-        //         if (pos)
-        //             ActiveTab[0].CodeFormatter.DrawTooltip(ImGui.GetMousePos());
-        //     }
-        //     ImGui.PopFont();
-        // }
+        if (!IsLibrarySearchVisible)
+            foreach (var editor in ActiveTab.Editors)
+                editor.DrawTooltip();
 
         DrawHelpWindow();
         DrawDebugWindow();
